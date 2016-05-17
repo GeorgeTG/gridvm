@@ -1,7 +1,9 @@
 from .ss_lexer import SimpleScriptLexer
 from .ss_ast import *
+from .ss_exception import CodeException
 
 from ply import yacc
+
 
 class SimpleScriptParser(object):
 
@@ -146,32 +148,20 @@ class SimpleScriptParser(object):
         else:
             p[0] = p[1]
 
-    def reverse_find(haystack, needle, index):
-        while index != 0:
-            if haystack[index] == needle:
-                return index
-            index -= 1
-
     def p_error(self, p):
         source = p.lexer.lexdata
         pos = p.lexer.lexpos
+        total = p.lexer.lexpos
+        lineno = p.lexer.lineno
 
-        start = reverse_find(source, '\n', pos)
-        end = source.find('\n', pos)
+        if ord(p.value[0]) == ord('\n'):
+            val = '\\n'
+        else:
+            val = p.value
 
-        line = source[start:end]
-        col_index = pos - start
+        message = 'Unexpected token: {} [{}]'.format(val, p.type)
+        raise CodeException(source, pos, lineno, total, message)
 
-        exception_body =\
-            '\nIn line {0}, near column {1}:\n\n {2}\n{3}{4}\n\n{5}'.format(
-                p.lexer.lineno,
-                col_index,
-                line.replace('\t', ' '),
-                ' ' * col_index,
-                '^',
-                'Unexpected token: {} [{}]'.format(p.value, p.type)
-            )
-        raise Exception(exception_body)
 
     def parse(self, text, debuglevel=0):
         return self.ssparser.parse(
@@ -185,5 +175,4 @@ if __name__ == '__main__':
         b = f.read()
     parser = SimpleScriptParser()
     code = parser.parse(b)
-
     code.show()

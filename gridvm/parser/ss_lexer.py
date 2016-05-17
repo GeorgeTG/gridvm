@@ -1,5 +1,7 @@
 from ply import lex
 
+from .ss_exception import CodeException
+
 class SimpleScriptLexer(object):
 
     def __init__(self):
@@ -65,6 +67,17 @@ class SimpleScriptLexer(object):
         t.value = int(t.value)
         return t
 
-    def t_error(self, t):
-        print(t.lexer.lineno)
+    def t_error(self, p):
+        total = p.lexer.lexpos
+        source = p.lexer.lexdata
+        pos = p.lexer.lexpos
+        lineno = p.lexer.lineno
 
+        if ord(p.value[0]) == ord('\n'):
+            val = '\\n'
+        else:
+            val = source[pos]
+
+        message = 'Unexpected character: {}'.format(val)
+
+        raise CodeException(source, pos, lineno, total, message)
