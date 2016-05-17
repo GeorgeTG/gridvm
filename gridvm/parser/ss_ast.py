@@ -125,6 +125,35 @@ class NodeVisitor(object):
             self.visit(c)
 
 
+class Program(Node):
+    __slots__ = ('ops', 'coord', '__weakref__')
+    def __init__(self, ops, coord=None):
+        self.ops = ops
+        self.coord = coord
+
+    def children(self):
+        nodelist = []
+        for i, child in enumerate(self.ops or []):
+            nodelist.append(("ops[%d]" % i, child))
+        return tuple(nodelist)
+
+    attr_names = ()
+
+class Statement(Node):
+    __slots__ = ('op', 'label', 'coord', '__weakref__')
+    def __init__(self, op, label, coord=None):
+        self.op = op
+        self.label = label
+        self.coord = coord
+
+    def children(self):
+        nodelist = []
+        if self.op is not None: nodelist.append(("op", self.op))
+        if self.label is not None: nodelist.append(("label", self.label))
+        return tuple(nodelist)
+
+    attr_names = ()
+
 class VarAccess(Node):
     __slots__ = ('var', 'coord', '__weakref__')
     def __init__(self, var, coord=None):
@@ -146,9 +175,10 @@ class ArrayAccess(Node):
 
     def children(self):
         nodelist = []
+        if self.index is not None: nodelist.append(("index", self.index))
         return tuple(nodelist)
 
-    attr_names = ('array', 'index', )
+    attr_names = ('array', )
 
 class Constant(Node):
     __slots__ = ('value', 'coord', '__weakref__')
@@ -163,6 +193,18 @@ class Constant(Node):
     attr_names = ('value', )
 
 class LabelDef(Node):
+    __slots__ = ('name', 'coord', '__weakref__')
+    def __init__(self, name, coord=None):
+        self.name = name
+        self.coord = coord
+
+    def children(self):
+        nodelist = []
+        return tuple(nodelist)
+
+    attr_names = ('name', )
+
+class LabelRef(Node):
     __slots__ = ('name', 'coord', '__weakref__')
     def __init__(self, name, coord=None):
         self.name = name
@@ -200,22 +242,10 @@ class BranchOperation(Node):
         nodelist = []
         if self.var1 is not None: nodelist.append(("var1", self.var1))
         if self.var2 is not None: nodelist.append(("var2", self.var2))
+        if self.label is not None: nodelist.append(("label", self.label))
         return tuple(nodelist)
 
-    attr_names = ('op', 'label', 'is_direct', )
-
-class PrintOperation(Node):
-    __slots__ = ('formatter', 'vect', 'coord', '__weakref__')
-    def __init__(self, formatter, vect, coord=None):
-        self.formatter = formatter
-        self.vect = vect
-        self.coord = coord
-
-    def children(self):
-        nodelist = []
-        return tuple(nodelist)
-
-    attr_names = ('formatter', 'vect', )
+    attr_names = ('op', 'is_direct', )
 
 class ArithmOperation(Node):
     __slots__ = ('op', 'var1', 'var2', 'var3', 'coord', '__weakref__')
@@ -267,6 +297,19 @@ class NetOperation(Node):
 
     attr_names = ('op', )
 
+class SleepOperation(Node):
+    __slots__ = ('var1', 'coord', '__weakref__')
+    def __init__(self, var1, coord=None):
+        self.var1 = var1
+        self.coord = coord
+
+    def children(self):
+        nodelist = []
+        if self.var1 is not None: nodelist.append(("var1", self.var1))
+        return tuple(nodelist)
+
+    attr_names = ()
+
 class Ret(Node):
     __slots__ = ('coord', '__weakref__')
     def __init__(self, coord=None):
@@ -276,4 +319,19 @@ class Ret(Node):
         return ()
 
     attr_names = ()
+
+class PrintOperation(Node):
+    __slots__ = ('formatter', 'vect', 'coord', '__weakref__')
+    def __init__(self, formatter, vect, coord=None):
+        self.formatter = formatter
+        self.vect = vect
+        self.coord = coord
+
+    def children(self):
+        nodelist = []
+        for i, child in enumerate(self.vect or []):
+            nodelist.append(("vect[%d]" % i, child))
+        return tuple(nodelist)
+
+    attr_names = ('formatter', )
 

@@ -1,18 +1,36 @@
+##-----------------------------------------------------------------
+## ss_parser: tree.decl
+## Defines the AST Node classes used in pycparser.
+##
+## Each entry is a Node sub-class name, listing the attributes
+## and child nodes of the class:
+##   <name>*     - a child node
+##   <name>**    - a sequence of child nodes
+##   <name>      - an attribute
+##
+## Originally:
+## pycparser: _c_ast.cfg
+## Copyright (C) 2008-2015, Eli Bendersky
+## License: BSD
+##-----------------------------------------------------------------
 
-# general variables
+# tree root
+Program:[ops**]
+Statement:[op*, label*]
+#general
 VarAccess:[var]
 
-ArrayAccess:[array, index]
+ArrayAccess:[array, index*]
 
 Constant:[value]
 
 LabelDef:[name]
+LabelRef:[name]
+
 Str:[data]
 
 # operations
-BranchOperation:[op, var1*, var2*, label, is_direct]
-
-PrintOperation:[formatter, vect]
+BranchOperation:[op, var1*, var2*, label*, is_direct]
 
 ArithmOperation:[op, var1*, var2*, var3*]
 
@@ -20,4 +38,9 @@ SetOperation:[op, var1*, var2*]
 
 NetOperation:[op, var1*, var2*]
 
+SleepOperation:[var1*]
+# System
 Ret:[]
+
+PrintOperation:[formatter, vect**]
+
