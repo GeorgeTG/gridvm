@@ -5,7 +5,7 @@ __pycache__/
 
 *lextab.py
 *yacctab.py
-*.swap
+*.swp
 
 # C extensions
 *.so
