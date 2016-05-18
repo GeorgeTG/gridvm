@@ -1,0 +1,4 @@
+#SIMPLESCRIPT_MULTITHREADED 3 
+#THREAD "counter.ss" 3 100
+#THREAD "counter.ss" 3 100
+#THREAD "counter.ss" 3 100

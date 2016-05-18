@@ -1,0 +1,20 @@
+input: myid //thread identifier
+       n  //number of threads
+       cl //counter limit
+
+
+nxtid=(myid + 1) % n
+prvid=(myid - 1) % n
+
+if(myid == 0){
+   cnt=0
+   snd(nxtid,cnt)
+}
+
+while(1){
+  rcv(previd,cnt)
+  if( cnt == cl){
+  	return
+  } 
+  snd(nxt,cnt)
+}

@@ -1,0 +1,51 @@
+##-----------------------------------------------------------------
+## ss_parser: tree.decl
+## Defines the Bytecode operations classes used in ss_generator.
+##
+## Each entry is an operation name, listing the parameters:
+##   <name>       - a constant value
+##   <name>*      - variable id
+##   <name>**     - array id
+##   <name>#      - pop from stack
+##   <name>$      - data offset
+##
+## Originally:
+## pycparser: _c_ast.cfg
+## Copyright (C) 2008-2015, Eli Bendersky
+## License: BSD
+##-----------------------------------------------------------------
+
+#set-var
+setv:[var*, val]
+movv:[var*, var*]
+
+#set-arr
+seta:[arr**, val]
+
+#ministack
+pushv:[var*]
+#stack += $arrays[stack()]
+pusha:[arr**]
+
+#arithmetic stuff
+add:[var1*, var2#, var3#]
+sub:[var1*, var2#, var3#]
+mul:[var1*, var2#, var3#]
+div:[var1*, var2#, var3#]
+mod:[var1*, var2#, var3#]
+
+#jumps
+jpm:[label]
+jpmc:[var1#, label]
+
+#net
+snd:[var1#, var2#]
+rcv:[var1*, var2#]
+
+#sys
+ret:[]
+
+#will read total+1 char arrays from .data
+prn:[offset$, total]
+slp:[var1#]
+
