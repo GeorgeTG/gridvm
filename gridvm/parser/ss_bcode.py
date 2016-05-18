@@ -14,8 +14,26 @@
 #-----------------------------------------------------------------
 
 
-class Operation(obbject):
-    pass
+class Parameter(object):
+    """ Paramter for an operation"""
+    def __init__(self, value, type):
+        self.value = value
+        self.type = type
+
+class Operation(object):
+    __slots__ = ()
+    def show(self):
+        opcode = OpCode(self.__opcode__)
+        repr = '[{}]{}:\n'.format(opcode.value, opcode.name)
+        for name, type, value in self.iter_params():
+            repr += '    {}: {}({})\n'.format(name, type, value)
+        print(repr)
+
+    def iter_params(self):
+        if self.params:
+            for attr in self.params:
+                param = getattr(self, attr)
+                yield (attr, param.type.name, param.value)
 
 class OpSetv(Operation):
     __opcode__ = 0
@@ -29,13 +47,13 @@ class OpSetv(Operation):
 
 class OpMovv(Operation):
     __opcode__ = 1
-    __slots__ = ('var', 'var',  '__weakref__',)
+    __slots__ = ('var1', 'var2',  '__weakref__',)
 
-    def __init__(self, var, var):
-        self.var = Parameter(var, ParameterType.VAR)
-        self.var = Parameter(var, ParameterType.VAR)
+    def __init__(self, var1, var2):
+        self.var1 = Parameter(var1, ParameterType.VAR)
+        self.var2 = Parameter(var2, ParameterType.VAR)
 
-    params = ('var', 'var')
+    params = ('var1', 'var2')
 
 class OpSeta(Operation):
     __opcode__ = 2
@@ -186,6 +204,8 @@ class OpSlp(Operation):
 
     params = ('var1',)
 
+
+from .ss_def import ParameterType
 
 from enum import IntEnum, unique
 

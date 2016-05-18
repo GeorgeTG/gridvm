@@ -8,4 +8,3 @@ class ParameterType(IntEnum):
     STACK = 3
     DATA = 4
 
-

@@ -1,7 +1,6 @@
 
 from string import Template
 
-
 class ByteCodeSpecGenerator:
     def __init__(self, cfg_filename='bcode.decl'):
         """ Initialize the code generator from a configuration
@@ -48,19 +47,15 @@ class ByteCodeSpecGenerator:
                 yield name, vallist
 
 
-
-
-
-class OperationParameter(object):
-    """ Paramter for an operation"""
+class ParameterCfg(object):
+    """ Parameter for an operation"""
     def __init__(self, name, type):
         self.name = name
         self.type = type
 
 class OperationCfg(object):
-    """ Node configuration.
+    """ Operation configuration.
 
-        name: node name
     """
     def __init__(self, name, contents):
         self.name = name
@@ -70,15 +65,15 @@ class OperationCfg(object):
             clean_entry = entry.rstrip('*#$')
 
             if entry.endswith('**'):
-                self.params.append(OperationParameter(clean_entry, ParameterType.ARRAY))
+                self.params.append(ParameterCfg(clean_entry, ParameterType.ARRAY))
             elif entry.endswith('*'):
-                self.params.append(OperationParameter(clean_entry, ParameterType.VAR))
+                self.params.append(ParameterCfg(clean_entry, ParameterType.VAR))
             elif entry.endswith('#'):
-                self.params.append(OperationParameter(clean_entry, ParameterType.STACK))
+                self.params.append(ParameterCfg(clean_entry, ParameterType.STACK))
             elif entry.endswith('$'):
-                self.params.append(OperationParameter(clean_entry, ParameterType.DATA))
+                self.params.append(ParameterCfg(clean_entry, ParameterType.DATA))
             else:
-                self.params.append(OperationParameter(clean_entry, ParameterType.CONST))
+                self.params.append(ParameterCfg(clean_entry, ParameterType.CONST))
 
     def generate_source(self, opcode):
         src = self._gen_init(opcode)
@@ -134,12 +129,33 @@ r'''#-----------------------------------------------------------------
 
 _PROLOGUE_CODE = \
 r'''
-class Operation(obbject):
-    pass
+class Parameter(object):
+    """ Paramter for an operation"""
+    def __init__(self, value, type):
+        self.value = value
+        self.type = type
+
+class Operation(object):
+    __slots__ = ()
+    def show(self):
+        opcode = OpCode(self.__opcode__)
+        repr = '[{}]{}:\n'.format(opcode.value, opcode.name)
+        for name, type, value in self.iter_params():
+            repr += '    {}: {}({})\n'.format(name, type, value)
+        print(repr)
+
+    def iter_params(self):
+        if self.params:
+            for attr in self.params:
+                param = getattr(self, attr)
+                yield (attr, param.type.name, param.value)
 
 '''
+
 _TEMPLATE_ENUM = \
 r'''
+from .ss_def import ParameterType
+
 from enum import IntEnum, unique
 
 @unique
