@@ -124,7 +124,6 @@ class NodeVisitor(object):
         for c_name, c in node.children():
             self.visit(c)
 
-
 class Program(Node):
     __slots__ = ('ops', 'coord', '__weakref__')
     def __init__(self, ops, coord=None):
