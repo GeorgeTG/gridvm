@@ -1,5 +1,5 @@
 #-----------------------------------------------------------------
-# _ast_gen.py
+# tree_gen.py
 #
 # Generates the AST Node classes from a specification given in
 # a configuration file
@@ -7,9 +7,12 @@
 # The design of this module was inspired by astgen.py from the
 # Python 2.5 code-base.
 #
+#
+# Original:
 # Copyright (C) 2008-2015, Eli Bendersky
 # License: BSD
 #-----------------------------------------------------------------
+
 import pprint
 from string import Template
 
@@ -146,7 +149,7 @@ r'''#-----------------------------------------------------------------
 # run the generator again.
 # ** ** *** ** **
 #
-# gridvm,: ss_ast.py
+# gridvm: ss_ast.py
 #
 # AST Node classes.
 #
@@ -219,7 +222,7 @@ class Node(object):
 
 
 class NodeVisitor(object):
-    """ A base NodeVisitor class for visiting c_ast nodes.
+    """ A base NodeVisitor class for visiting ss_ast nodes.
         Subclass it and define your own visit_XXX methods, where
         XXX is the class name you want to visit with these
         methods.

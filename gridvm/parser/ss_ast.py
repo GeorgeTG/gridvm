@@ -76,7 +76,6 @@ class Node(object):
                 showcoord=showcoord,
                 _my_node_name=child_name)
 
-
 class NodeVisitor(object):
     """ A base NodeVisitor class for visiting c_ast nodes.
         Subclass it and define your own visit_XXX methods, where

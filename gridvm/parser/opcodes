@@ -1,0 +1,9 @@
+
+LOADV i   # stack.append(vars[i])
+STOREV i  # vars[i] = stack.pop()
+
+LOADA i   #stack.append(arrays[i])
+STOREV i  # vars[i] = stack.pop()
+
+MAKEVAR
+MAKEARR
