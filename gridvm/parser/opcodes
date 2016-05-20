@@ -1,9 +1,54 @@
 
-LOADV i   # stack.append(vars[i])
-STOREV i  # vars[i] = stack.pop()
+! each instruction is 1 byte, with a 2 byte argument
+! if an argument is not needed, pad with zeroes
+! TOS = top of stack
+! we have 4 tables
+! vars
+! arrays
+! constants #may also contains strings
+! cmp_ops #may be built-in the interpreter
 
-LOADA i   #stack.append(arrays[i])
-STOREV i  # vars[i] = stack.pop()
+LOAD_CONST -> stack.append(consts[arg])
 
-MAKEVAR
-MAKEARR
+LOAD_VAR   -> stack.append(vars[arg])
+STORE_VAR  -> vars[arg] = stack.pop()
+
+LOAD_ARRAY     -> stack.append(arrays[arg][stack.pop()]) #index is TOS
+STORE_AARRAY   -> arrays[arg][stack.pop()] = stack.pop()
+
+# not sure if needed
+BUILD_VAR     -> init_var(vars[arg]) 
+BUILD_ARRAY   -> init_array(arrays[arg])
+
+# stack manipulation
+ROT_TWO ->  Rotate top 2 stack items
+
+# warning, reverse stack order
+ADD ->  stack.append( stack.pop() + stack.pop() )
+SUB ->  stack.append( stack.pop() - stack.pop() )
+MUL ->  stack.append( stack.pop() * stack.pop() )
+DIV ->  stack.append( stack.pop() / stack.pop() )
+MOD ->  stack.append( stack.pop() % stack.pop() )
+
+# comapre top two stack items
+# warning, reverse stack order
+# opataions should be 0: > 1: < 2: >= 3: <= 4: ==
+COMPARE_OP ->  stack.append( cmp_ops[arg](stack.pop(), stack.pop()) )
+JMP_IF_TRUE -> if stack.pop() == true: pc = arg
+JMP         -> pc = arg
+
+# warning, reverse stack order
+SEND ->  send(stack.pop(), stack.pop())
+RCV  -> stack.append( recv(stack.pop(), stack.pop()) )
+
+SLP -> sleep( stack.pop() )
+
+# warning, reverse stack order
+PRN:
+    vect = []
+    format_str = const[stack.pop()] # stack can only contains ints, load the offset of const for a str
+    for _ in range(arg):
+        vect.append(stack.pop())
+    printf( format_str, vect )
+
+RET  -> gg
