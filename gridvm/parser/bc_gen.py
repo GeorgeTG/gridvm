@@ -62,18 +62,8 @@ class OperationCfg(object):
         self.params = []
 
         for entry in contents:
-            clean_entry = entry.rstrip('*#$')
-
-            if entry.endswith('**'):
-                self.params.append(ParameterCfg(clean_entry, ParameterType.ARRAY))
-            elif entry.endswith('*'):
-                self.params.append(ParameterCfg(clean_entry, ParameterType.VAR))
-            elif entry.endswith('#'):
-                self.params.append(ParameterCfg(clean_entry, ParameterType.STACK))
-            elif entry.endswith('$'):
-                self.params.append(ParameterCfg(clean_entry, ParameterType.DATA))
-            else:
-                self.params.append(ParameterCfg(clean_entry, ParameterType.CONST))
+            #clean_entry = entry.rstrip('*#$')
+            self.params.append(entry)
 
     def generate_source(self, opcode):
         src = self._gen_init(opcode)

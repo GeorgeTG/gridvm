@@ -8,17 +8,20 @@
 ! constants #may also contains strings
 ! cmp_ops #may be built-in the interpreter
 
+! the interpreter should also have a memory mapping of
+! mem_vars { var_index : value }
+! mem_arrays { array_index : array_data }
+
 LOAD_CONST -> stack.append(consts[arg])
 
-LOAD_VAR   -> stack.append(vars[arg])
-STORE_VAR  -> vars[arg] = stack.pop()
+LOAD_VAR   -> stack.append(mem_vars[arg])
+STORE_VAR  -> mem_vars[arg] = stack.pop()
 
-LOAD_ARRAY     -> stack.append(arrays[arg][stack.pop()]) #index is TOS
-STORE_AARRAY   -> arrays[arg][stack.pop()] = stack.pop()
+LOAD_ARRAY     -> stack.append(mem_arrays[arg][stack.pop()]) #index is TOS
+STORE_ARRAY   -> mem_arrays[arg][stack.pop()] = stack.pop()
 
-# not sure if needed
-BUILD_VAR     -> init_var(vars[arg]) 
-BUILD_ARRAY   -> init_array(arrays[arg])
+BUILD_VAR     -> mem_vars[arg] = var()
+BUILD_ARRAY   -> mem_arrays[arg] = array()
 
 # stack manipulation
 ROT_TWO ->  Rotate top 2 stack items
@@ -32,7 +35,7 @@ MOD ->  stack.append( stack.pop() % stack.pop() )
 
 # comapre top two stack items
 # warning, reverse stack order
-# opataions should be 0: > 1: < 2: >= 3: <= 4: ==
+# operations should be 0: > 1: < 2: >= 3: <= 4: ==
 COMPARE_OP ->  stack.append( cmp_ops[arg](stack.pop(), stack.pop()) )
 JMP_IF_TRUE -> if stack.pop() == true: pc = arg
 JMP         -> pc = arg
