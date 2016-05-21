@@ -31,3 +31,6 @@ class CodeException(Exception):
             )
         super().__init__(exception_body)
 
+class GeneratorException(Exception):
+    def __init__(self, line_no, cause):
+        super().__init__('Error at line {}: {}'.format(line_no, cause))

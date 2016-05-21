@@ -56,7 +56,7 @@ class OpCode(IntEnum):
     COMPARE_OP   = 13
     JMP_IF_TRUE  = 14
     JMP          = 15
-    SEND         = 16
+    SND         = 16
     RCV          = 17
     SLP          = 18
     PRN          = 19

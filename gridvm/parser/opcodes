@@ -2,13 +2,15 @@
 ! each instruction is 1 byte, with a 2 byte argument
 ! if an argument is not needed, pad with zeroes
 ! ToS = top of stack
-! we have 4 tables
+! we have 6 tables
 ! vars
 ! arrays
 ! constants #may also contain strings
 ! cmp_ops #may be built-in the interpreter
+! labels_table
+! labels_names
 
-! the interpreter should also have a memory mapping of
+! the interpreter should also have the following memory mappings
 ! mem_vars { var_index : value }
 ! mem_arrays { array_index : array_data }
 

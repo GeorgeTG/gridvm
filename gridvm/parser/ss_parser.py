@@ -84,7 +84,7 @@ class SimpleScriptParser(object):
 
     def p_rcv(self, p):
         """ rcv : RCV varval var"""
-        p[0] = NetOperation(p[1], p[2], None, coord=p.lexer.lineno())
+        p[0] = NetOperation(p[1], p[2], p[3], coord=p.lexer.lineno())
 
     def p_varvals(self, p):
         """ varvals : varvals varval

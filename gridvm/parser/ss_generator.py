@@ -1,7 +1,7 @@
 
 from .ss_ast import *
 from .ss_bcode import  Operation, OpCode
-
+from .ss_exception import GeneratorException
 
 ARITHM_TABLE = {
         'ADD' : OpCode.ADD,
@@ -11,24 +11,51 @@ ARITHM_TABLE = {
         'MOD' : OpCode.MOD,
         }
 
+BRANCH_CMP_OPS = {
+        'GT': 0, # >
+        'GE': 1, # >=
+        'LT': 2, # <
+        'LE': 3, # <=
+        'EQ': 4  # ==
+        }
+
 class SSGenerator(object):
     """ Uses the same visitor pattern as ss_ast.NodeVisitor, but modified to
     build the bytecode version of the program simoultanously
     """
     def __init__(self):
-        self.vars = dict()
-        self.arrays = dict()
+        self.vars = { '$argc' : 0 }
+        self.arrays = { '$argv' : 0 }
         self.consts = list()
+
         self.label_defs = dict()
-        self.label_refs = dict()
+        self.label_refs = list()
+
+        self.next_line = 0
         self.instructions = []
 
     def add_instruction(self, *args):
         self.instructions.append(Operation(*args))
 
-    def fail(self, node, cause):
-        print('Error: ' + cause)
+    def fail(self, cause):
+        raise GeneratorException(self.next_line, cause)
 
+    def _fix_labels(self):
+        labels = []
+        for index in self.label_refs:
+            instruction = self.instructions[index]
+            try:
+                label_index = self.label_defs[instruction.arg]
+
+                # add index to jump table
+                labels.append(label_index)
+                # replace the arg, with the table's index
+                instruction.arg = len(labels) - 1
+            except KeyError:
+                # No such label
+                self.fail('Label "{}" not defined'.format(instruction.arg))
+
+        self.labels_table = labels
 
     def visit(self, node):
         method = 'visit_' + node.__class__.__name__
@@ -38,14 +65,18 @@ class SSGenerator(object):
         for name, child in node.children():
             self.visit(child)
 
+        self._fix_labels()
         return self.instructions
 
     def visit_Statement(self, node):
         next_index = len(self.instructions)
+        if node.label:
+            self.label_defs[node.label.name] = next_index
 
         self.visit(node.op)
 
         self.instructions[next_index].line_no = node.coord-1
+        self.next_line = node.coord - 1
 
     def visit_VarAccess(self, node):
         if node.var not in self.vars:
@@ -108,5 +139,46 @@ class SSGenerator(object):
 
         self.build(node.var1)
 
+    def visit_BranchOperation(self, node):
+        if node.op != 'BRA':
+            self.visit(node.var1)
+            self.visit(node.var2)
+
+            self.add_instruction(OpCode.COMPARE_OP, BRANCH_CMP_OPS[node.op[1:]])
+            self.add_instruction(OpCode.JMP_IF_TRUE, node.label.name)
+        else:
+            node.show()
+            # jump always
+            self.add_instruction(OpCode.JMP, node.label.name)
+
+        # fix labels later
+        self.label_refs.append(len(self.instructions) - 1)
+
+    def visit_NetOperation(self, node):
+        # WARN: thread id is var1
+        if node.op == 'SND':
+            self.visit(node.var1)
+            self.visit(node.var2)
+            self.add_instruction(OpCode.SND)
+        else:
+            self.visit(node.var1)
+            self.add_instruction(OpCode.RCV)
+            self.build(node.var2)
+
+    def visit_SleepOperation(self, node):
+        self.visit(node.var1)
+        self.add_instruction(OpCode.SLP)
+
+    def visit_PrintOperation(self, node):
+        self.consts.append(node.formatter)
+        self.add_instruction(OpCode.LOAD_CONST, len(self.consts) - 1)
+
+        vector = node.vect or [] # can be None
+        for name, child in node.children():
+            self.visit(child)
+        self.add_instruction(OpCode.PRN, len(vector))
+
+    def visit_Ret(self, node):
+        self.add_instruction(OpCode.RET)
 
 
