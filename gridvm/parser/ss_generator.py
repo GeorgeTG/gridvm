@@ -1,6 +1,7 @@
 
 from .ss_ast import *
 from .ss_bcode import  Operation, OpCode
+from .ss_code import SimpleScriptCodeObject
 from .ss_exception import GeneratorException
 
 ARITHM_TABLE = {
@@ -19,7 +20,15 @@ BRANCH_CMP_OPS = {
         'EQ': 4  # ==
         }
 
-class SSGenerator(object):
+def invert_map(map):
+    return { v:k for k,v in map.items() }
+
+def list_from_mapping(map):
+    inv = invert_map(map)
+    return list( (inv[index] for index in range(len(inv))) )
+
+
+class SimpleScriptGenerator(object):
     """ Uses the same visitor pattern as ss_ast.NodeVisitor, but modified to
     build the bytecode version of the program simoultanously
     """
@@ -57,6 +66,21 @@ class SSGenerator(object):
 
         self.labels_table = labels
 
+    def generate(self, tree):
+        if not isinstance(tree, Program):
+            raise ValueError('Bad tree')
+        self.visit(tree)
+
+        self._fix_labels()
+
+        return SimpleScriptCodeObject(
+                instructions=self.instructions,
+                consts=self.consts,
+                vars=list_from_mapping(self.vars),
+                arrays=list_from_mapping(self.arrays),
+                labels=self.labels_table,
+                label_names=invert_map(self.label_defs))
+
     def visit(self, node):
         method = 'visit_' + node.__class__.__name__
         return getattr(self, method)(node)
@@ -65,8 +89,6 @@ class SSGenerator(object):
         for name, child in node.children():
             self.visit(child)
 
-        self._fix_labels()
-        return self.instructions
 
     def visit_Statement(self, node):
         next_index = len(self.instructions)
@@ -180,5 +202,6 @@ class SSGenerator(object):
 
     def visit_Ret(self, node):
         self.add_instruction(OpCode.RET)
+
 
 

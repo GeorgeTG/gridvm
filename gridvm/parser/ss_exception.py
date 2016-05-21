@@ -1,7 +1,6 @@
 from .ss_util import reverse_find
 
 class CodeException(Exception):
-
     def __init__(self, source, pos, lineno, total, message):
         start = reverse_find(source, '\n', pos - 1)
         end = source.find('\n', pos-1)
@@ -34,3 +33,8 @@ class CodeException(Exception):
 class GeneratorException(Exception):
     def __init__(self, line_no, cause):
         super().__init__('Error at line {}: {}'.format(line_no, cause))
+
+class CodeObjectException(Exception):
+    def __init__(self, exception, *args, **kwargs):
+        super().__init__('Cannot load Code Object:[{}] - {}'.format(
+            exception.__class__.__name__, str(exception)), *args, **kwargs)
