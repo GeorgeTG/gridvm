@@ -54,7 +54,7 @@ class SimpleScriptParser(object):
 
     def p_labeled_statement(self, p):
         """ statement : LABEL operation NEWLINE"""
-        p[0] = Statement(p[2], LabelDef(p[3]), coord=p.lexer.lineno())
+        p[0] = Statement(p[2], LabelDef(p[1]), coord=p.lexer.lineno())
 
     def p_statement(self, p):
         """ statement : operation NEWLINE"""
