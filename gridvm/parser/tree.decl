@@ -30,7 +30,7 @@ LabelRef:[name]
 Str:[data]
 
 # operations
-BranchOperation:[op, var1*, var2*, label*, is_direct]
+BranchOperation:[op, var1*, var2*, label*]
 
 ArithmOperation:[op, var1*, var2*, var3*]
 

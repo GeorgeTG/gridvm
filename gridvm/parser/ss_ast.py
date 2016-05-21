@@ -7,7 +7,7 @@
 # run the generator again.
 # ** ** *** ** **
 #
-# gridvm,: ss_ast.py
+# gridvm: ss_ast.py
 #
 # AST Node classes.
 #
@@ -76,8 +76,9 @@ class Node(object):
                 showcoord=showcoord,
                 _my_node_name=child_name)
 
+
 class NodeVisitor(object):
-    """ A base NodeVisitor class for visiting c_ast nodes.
+    """ A base NodeVisitor class for visiting ss_ast nodes.
         Subclass it and define your own visit_XXX methods, where
         XXX is the class name you want to visit with these
         methods.
@@ -122,6 +123,7 @@ class NodeVisitor(object):
         """
         for c_name, c in node.children():
             self.visit(c)
+
 
 class Program(Node):
     __slots__ = ('ops', 'coord', '__weakref__')
@@ -227,13 +229,12 @@ class Str(Node):
     attr_names = ('data', )
 
 class BranchOperation(Node):
-    __slots__ = ('op', 'var1', 'var2', 'label', 'is_direct', 'coord', '__weakref__')
-    def __init__(self, op, var1, var2, label, is_direct, coord=None):
+    __slots__ = ('op', 'var1', 'var2', 'label', 'coord', '__weakref__')
+    def __init__(self, op, var1, var2, label, coord=None):
         self.op = op
         self.var1 = var1
         self.var2 = var2
         self.label = label
-        self.is_direct = is_direct
         self.coord = coord
 
     def children(self):
@@ -243,7 +244,7 @@ class BranchOperation(Node):
         if self.label is not None: nodelist.append(("label", self.label))
         return tuple(nodelist)
 
-    attr_names = ('op', 'is_direct', )
+    attr_names = ('op', )
 
 class ArithmOperation(Node):
     __slots__ = ('op', 'var1', 'var2', 'var3', 'coord', '__weakref__')

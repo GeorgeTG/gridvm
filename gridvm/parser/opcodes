@@ -1,7 +1,7 @@
 
 ! each instruction is 1 byte, with a 2 byte argument
 ! if an argument is not needed, pad with zeroes
-! TOS = top of stack
+! ToS = top of stack
 ! we have 4 tables
 ! vars
 ! arrays
@@ -12,12 +12,14 @@
 ! mem_vars { var_index : value }
 ! mem_arrays { array_index : array_data }
 
+! all capitalised words are generated into OpCodes
+
 LOAD_CONST -> stack.append(consts[arg])
 
 LOAD_VAR   -> stack.append(mem_vars[arg])
 STORE_VAR  -> mem_vars[arg] = stack.pop()
 
-LOAD_ARRAY     -> stack.append(mem_arrays[arg][stack.pop()]) #index is TOS
+LOAD_ARRAY     -> stack.append(mem_arrays[arg][stack.pop()]) #index is ToS
 STORE_ARRAY   -> mem_arrays[arg][stack.pop()] = stack.pop()
 
 BUILD_VAR     -> mem_vars[arg] = var()
@@ -47,7 +49,7 @@ RCV  -> stack.append( recv(stack.pop(), stack.pop()) )
 SLP -> sleep( stack.pop() )
 
 # warning, reverse stack order
-PRN:
+PRN : 
     vect = []
     format_str = const[stack.pop()] # stack can only contains ints, load the offset of const for a str
     for _ in range(arg):

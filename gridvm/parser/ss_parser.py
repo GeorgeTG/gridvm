@@ -54,11 +54,11 @@ class SimpleScriptParser(object):
 
     def p_labeled_statement(self, p):
         """ statement : LABEL operation NEWLINE"""
-        p[0] = Statement(p[2], LabelDef(p[3]))
+        p[0] = Statement(p[2], LabelDef(p[3]), coord=p.lexer.lineno())
 
     def p_statement(self, p):
         """ statement : operation NEWLINE"""
-        p[0] = Statement(p[1], None)
+        p[0] = Statement(p[1], None, coord=p.lexer.lineno())
 
     def p_operation(self, p):
         """ operation : arithm
@@ -71,7 +71,7 @@ class SimpleScriptParser(object):
 
     def p_set(self, p):
         """ set : SET var varval """
-        p[0] = SetOperation(p[1], p[2], p[3])
+        p[0] = SetOperation(p[1], p[2], p[3], coord=p.lexer.lineno())
 
     def p_net(self, p):
         """ net : rcv
@@ -80,11 +80,11 @@ class SimpleScriptParser(object):
 
     def p_snd(self, p):
         """ snd : SND varval varval"""
-        p[0] = NetOperation(p[1], p[2], p[3])
+        p[0] = NetOperation(p[1], p[2], p[3], coord=p.lexer.lineno())
 
     def p_rcv(self, p):
         """ rcv : RCV varval var"""
-        p[0] = NetOperation(p[1], p[2], None)
+        p[0] = NetOperation(p[1], p[2], None, coord=p.lexer.lineno())
 
     def p_varvals(self, p):
         """ varvals : varvals varval
@@ -99,38 +99,39 @@ class SimpleScriptParser(object):
 
     def p_ret(self, p):
         """ ret : RET"""
-        p[0] = Ret()
+        p[0] = Ret(coord=p.lexer.lineno())
 
     def p_sys_slp(self, p):
         """ sys : SYS varval """
-        p[0] = SleepOperaton(p[2])
+        p[0] = SleepOperaton(p[2], coord=p.lexer.lineno())
 
     def p_sys_prn_no_vect(self, p):
         """ sys : SYS STR"""
-        p[0] = PrintOperation(p[2], None)
+        p[0] = PrintOperation(p[2], None, coord=p.lexer.lineno())
 
     def p_sys_prn(self, p):
         """ sys : SYS STR varvals"""
         if not isinstance(p[3], tuple):
-            p[0] = PrintOperation(p[2], (p[3],))
+            p[0] = PrintOperation(p[2], (p[3],), coord=p.lexer.lineno())
         else:
-            p[0] = PrintOperation(p[2], p[3])
+            p[0] = PrintOperation(p[2], p[3], coord=p.lexer.lineno())
 
     def p_branch(self, p):
         """ branch : BRANCH varval varval LABEL
                    | BRANCH LABEL """
         if len(p) == 5:
-            p[0] = BranchOperation(p[1], p[2], p[3], LabelRef(p[4]), False)
+            p[0] = BranchOperation(p[1], p[2], p[3], LabelRef(p[4]), coord=p.lexer.lineno())
         else:
-            p[0] = BranchOperation(p[1], LabelRef(p[2]), None, None, True)
+            p[0] = BranchOperation(p[1], LabelRef(p[2], coord=p.lexer.lineno()),
+                    None, None, coord=p.lexer.lineno())
 
     def p_artihm(self, p):
         """ arithm : ARITHM var varval varval """
-        p[0] = ArithmOperation(p[1], p[2], p[3], p[4])
+        p[0] = ArithmOperation(p[1], p[2], p[3], p[4], coord=p.lexer.lineno())
 
     def p_array(self, p):
         """ array : VARNAME LBRACKET varval RBRACKET"""
-        p[0] = ArrayAccess(p[1], p[3])
+        p[0] = ArrayAccess(p[1], p[3], coord=p.lexer.lineno())
 
     def p_var(self, p):
         """ var : VARNAME
@@ -138,13 +139,13 @@ class SimpleScriptParser(object):
         if isinstance(p[1], ArrayAccess):
             p[0] = p[1]
         else:
-            p[0] = VarAccess(p[1])
+            p[0] = VarAccess(p[1], coord=p.lexer.lineno())
 
     def p_varval(self, p):
         """ varval : var
                    | NUMBER"""
         if isinstance(p[1], int):
-            p[0] = Constant(p[1])
+            p[0] = Constant(p[1], coord=p.lexer.lineno())
         else:
             p[0] = p[1]
 
