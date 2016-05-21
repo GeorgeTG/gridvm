@@ -5,7 +5,7 @@
 ! we have 4 tables
 ! vars
 ! arrays
-! constants #may also contains strings
+! constants #may also contain strings
 ! cmp_ops #may be built-in the interpreter
 
 ! the interpreter should also have a memory mapping of

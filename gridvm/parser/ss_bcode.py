@@ -15,13 +15,12 @@ class Operation(object):
 
     def __str__(self):
         repr = ''
-
         if self.line_no:
-            repr += '{}:'.format(self.line_no)
+            repr += '\n{}:'.format(self.line_no).ljust(6)
         else:
-            repr += '   '
+            repr += ' ' * 5
 
-        repr = ' [{}]{} '.format(self.opcode.value, self.opcode.name)
+        repr += '[{:2d}]{}'.format(self.opcode.value, self.opcode.name).ljust(18)
 
         if self.arg is not None:
             repr += str(self.arg)

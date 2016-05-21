@@ -3,6 +3,14 @@ from .ss_ast import *
 from .ss_bcode import  Operation, OpCode
 
 
+ARITHM_TABLE = {
+        'ADD' : OpCode.ADD,
+        'SUB' : OpCode.SUB,
+        'MUL' : OpCode.MUL,
+        'DIV' : OpCode.DIV,
+        'MOD' : OpCode.MOD,
+        }
+
 class SSGenerator(object):
     """ Uses the same visitor pattern as ss_ast.NodeVisitor, but modified to
     build the bytecode version of the program simoultanously
@@ -33,9 +41,11 @@ class SSGenerator(object):
         return self.instructions
 
     def visit_Statement(self, node):
-        #TODO LABEL
-        self.instructions.append(node.coord - 1)
+        next_index = len(self.instructions)
+
         self.visit(node.op)
+
+        self.instructions[next_index].line_no = node.coord-1
 
     def visit_VarAccess(self, node):
         if node.var not in self.vars:
@@ -62,12 +72,23 @@ class SSGenerator(object):
         self.add_instruction(OpCode.LOAD_ARRAY, self.arrays[node.array])
 
     def build_var(self, node):
-        self.vars[node.var] = len(self.vars)
-        self.add_instruction(OpCode.BUILD_VAR, len(self.vars) - 1)
+        if node.var not in self.vars:
+            # Build if needed
+            self.vars[node.var] = len(self.vars)
+            self.add_instruction(OpCode.BUILD_VAR, len(self.vars) - 1)
+
+        self.add_instruction(OpCode.STORE_VAR, self.vars[node.var])
 
     def build_array(self, node):
-        self.arrays[node.array] = len(self.arrays)
-        self.add_instruction(OpCode.BUILD_ARRAY, len(self.arrays) - 1)
+        if node.array not in self.arrays:
+            # Build if needed
+            self.arrays[node.array] = len(self.arrays)
+            self.add_instruction(OpCode.BUILD_ARRAY, len(self.arrays) - 1)
+
+        #same as access, but do a store instead
+        self.visit_ArrayAccess(node)
+        self.instructions.pop()
+        self.add_instruction(OpCode.STORE_ARRAY, self.arrays[node.array])
 
     def build(self, node):
         method = 'build_' + node.__class__.__name__[:-6].lower()
@@ -76,19 +97,16 @@ class SSGenerator(object):
     def visit_SetOperation(self, node):
         self.visit(node.var2)
         #stack has our value
-        if isinstance(node.var1, VarAccess):
-            if node.var1.var not in self.vars:
-                self.build_var(node.var1)
-            self.add_instruction(OpCode.STORE_VAR, self.vars[node.var1.var])
-        else:
-            #array
-            if node.var1.array not in self.arrays:
-                self.build_array(node.var1)
 
-            #same as access, but do a store instead
-            self.visit_ArrayAccess(node.var1)
-            self.instructions.pop()
-            self.add_instruction(OpCode.STORE_ARRAY, self.arrays[node.var1.array])
+        self.build(node.var1)
+
+    def visit_ArithmOperation(self, node):
+        self.visit(node.var2)
+        self.visit(node.var3)
+
+        self.add_instruction(ARITHM_TABLE[node.op])
+
+        self.build(node.var1)
 
 
 
