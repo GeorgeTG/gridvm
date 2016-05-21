@@ -122,8 +122,8 @@ class SimpleScriptParser(object):
         if len(p) == 5:
             p[0] = BranchOperation(p[1], p[2], p[3], LabelRef(p[4]), coord=p.lexer.lineno())
         else:
-            p[0] = BranchOperation(p[1], LabelRef(p[2], coord=p.lexer.lineno()),
-                    None, None, coord=p.lexer.lineno())
+            p[0] = BranchOperation(p[1], None, None, LabelRef(p[2], coord=p.lexer.lineno()),
+                    coord=p.lexer.lineno())
 
     def p_artihm(self, p):
         """ arithm : ARITHM var varval varval """
