@@ -1,10 +1,9 @@
 """
 Simple Script bytecode obejct file representation
 """
-
 import pickle
 
-from .ss_exception import CodeObjectException
+from ..ss_exception import CodeObjectException
 
 MAGIC = 0xDA55C0DE
 
@@ -38,7 +37,10 @@ class SimpleScriptCodeObject(object):
 
         return cls(*args)
 
-    def to_file(self, filename):
+    def to_file(self, filename, compress=False):
+        if compress:
+            import lzma
+            open = lzma.open
         with open(filename, 'wb') as f:
             f.write(MAGIC.to_bytes(4, byteorder='big'))
             code = (self.instructions,
@@ -51,7 +53,10 @@ class SimpleScriptCodeObject(object):
             pickle.dump(code, f, pickle.HIGHEST_PROTOCOL)
 
     @classmethod
-    def from_file(cls, filename):
+    def from_file(cls, filename, decompress=False):
+        if decompress:
+            import lzma
+            open = lzma.open
         with open(filename, 'rb') as f:
             magic = f.read(4)
             if MAGIC != int.from_bytes(magic, byteorder='big'):

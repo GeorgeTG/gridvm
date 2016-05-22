@@ -1,6 +1,5 @@
 from ply import lex
-
-from .ss_exception import CodeException
+from ..ss_exception import CodeException
 
 class SimpleScriptLexer(object):
 

@@ -1,7 +1,5 @@
 import struct
-
 from enum import IntEnum, unique
-
 
 OPERATION_FMT = 'BH'
 

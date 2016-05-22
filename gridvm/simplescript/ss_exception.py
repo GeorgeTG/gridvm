@@ -1,8 +1,15 @@
-from .ss_util import reverse_find
+def reverse_find(haystack, needle, index):
+    while index > 0:
+        if haystack[index] == needle:
+            return index
+        index -= 1
+    else:
+        return -1
+
 
 class CodeException(Exception):
     def __init__(self, source, pos, lineno, total, message):
-        start = reverse_find(source, '\n', pos - 1)
+        start = reverse_find(source, '\n', pos-1)
         end = source.find('\n', pos-1)
         col_index = pos - start
 

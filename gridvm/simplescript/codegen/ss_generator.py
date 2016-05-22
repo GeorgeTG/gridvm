@@ -1,8 +1,8 @@
-
-from .ss_ast import *
 from .ss_bcode import  Operation, OpCode
 from .ss_code import SimpleScriptCodeObject
-from .ss_exception import GeneratorException
+
+from ..parser.ss_ast import *
+from ..ss_exception import GeneratorException
 
 ARITHM_TABLE = {
         'ADD' : OpCode.ADD,
@@ -169,7 +169,6 @@ class SimpleScriptGenerator(object):
             self.add_instruction(OpCode.COMPARE_OP, BRANCH_CMP_OPS[node.op[1:]])
             self.add_instruction(OpCode.JMP_IF_TRUE, node.label.name)
         else:
-            node.show()
             # jump always
             self.add_instruction(OpCode.JMP, node.label.name)
 

@@ -1,6 +1,6 @@
 from .ss_lexer import SimpleScriptLexer
 from .ss_ast import *
-from .ss_exception import CodeException
+from ..ss_exception import CodeException
 
 from ply import yacc
 
