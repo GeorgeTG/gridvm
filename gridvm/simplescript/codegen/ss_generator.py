@@ -192,7 +192,16 @@ class SimpleScriptGenerator(object):
 
     def visit_PrintOperation(self, node):
         self.consts.append(node.formatter)
-        self.add_instruction(OpCode.LOAD_CONST, len(self.consts) - 1)
+
+        # load the index of the string in the stack
+        value = len(self.consts) - 1
+        try:
+            index = self.consts.index(value)
+        except ValueError:
+            self.consts.append(value)
+            index = len(self.consts) - 1
+
+        self.add_instruction(OpCode.LOAD_CONST, index)
 
         vector = node.vect or [] # can be None
         for name, child in node.children():
