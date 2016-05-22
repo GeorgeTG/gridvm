@@ -18,33 +18,37 @@ class SimpleScriptInterpreter(object):
         self._stack = []
 
     def load_source(self, filename):
-        filename = Path(filename).resolve()
-        source_ts = filename.stat().st_mtime
+        source_file = Path(filename).resolve()
+        source_ts = source_file.stat().st_mtime
 
-        name = filename.stem
-        code_object = filename.parent / ('.'+name+'.ssc')
-        if code_object.is_file() and code_object.stat().st_mtime > source_ts:
+        # myprogram.ss -> .myprogram.ssc
+        name = source_file.stem
+        code_object = source_file.parent / ('.' + name + '.ssc')
+        code_object_ts = code_object.stat().st_mtime
+
+        if code_object.is_file() and code_object_ts > source_ts:
+            # code object file must exist and be newer than source to be up to date
             self.load_code_object(str(code_object))
         else:
+            # open the original source code
+            with source_file.open('r') as f:
+                source = f.read()
+
             # parse source into tree
             parser = SimpleScriptParser()
-            with filename.open('r') as f:
-                source = f.read()
             tree = parser.parse(source)
 
             # generate bytecode
             gen = SimpleScriptGenerator()
             code = gen.generate(tree)
 
-            # save to file for future use
+            # save for future use
             code.to_file(str(code_object), compress=True)
             self._code = code
 
     def load_code_object(self, filename):
         self._code = SimpleScriptCodeObject.from_file(filename, decompress=True)
 
-    def load_bytes(self, buffer):
-        pass
 
     def dump_state(self):
         state = (self._pc,
@@ -52,7 +56,9 @@ class SimpleScriptInterpreter(object):
                 self._arrays,
                 self._stack)
         return lzma.compress(
-                MAGIC.to_bytes(4, byteorder='big') + pickle.dumps(state, pickle.HIGHEST_PROTOCOL))
+            MAGIC.to_bytes(4, byteorder='big') +
+            pickle.dumps(state, pickle.HIGHEST_PROTOCOL)
+        )
 
     def load_state(self, state):
         buff = lzma.decompress(state)
@@ -64,6 +70,9 @@ class SimpleScriptInterpreter(object):
     def run(self, argv=[]):
         if not self._code:
             raise RuntimeError("No code loaded")
+
+        # TODO: make this run some code :)
+
 
 if __name__ == '__main__':
     import sys
