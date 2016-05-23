@@ -1,0 +1,16 @@
+
+limit = argv[1]
+direction = 1
+counter = 0
+
+while (1)
+    counter += direction
+    print "Sending counter: ", counter
+    send(argv[0], counter)
+    recv(argv[0], counter)
+    print "Received counter: ", counter
+
+    if counter == 0:
+        direction -= direction
+    if counter == limit:
+        direction -= direction
