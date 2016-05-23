@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from .ss_lexer import SimpleScriptLexer
 from .ss_ast import *
 from ..ss_exception import CodeException
@@ -12,11 +14,17 @@ class SimpleScriptParser(object):
     def __init__(
         self,
         lex_optimize=True,
-        lextab='ssparser.lextab',
+        lextab='sslex.lextab',
         yacc_optimize=True,
         yacctab='ssparser.yacctab',
         yacc_debug=False,
         taboutputdir=''):
+
+        file_dir = Path(__file__).parent
+        if not lextab:
+            lextab = str(file_dir / 'ssparser.lextab')
+        if not yacctab:
+            yacctab = str(file_dir / 'ssparser.yacctab')
 
         self.sslex = SimpleScriptLexer()
 
@@ -103,7 +111,7 @@ class SimpleScriptParser(object):
 
     def p_sys_slp(self, p):
         """ sys : SYS varval """
-        p[0] = SleepOperaton(p[2], coord=p.lexer.lineno())
+        p[0] = SleepOperation(p[2], coord=p.lexer.lineno())
 
     def p_sys_prn_no_vect(self, p):
         """ sys : SYS STR"""

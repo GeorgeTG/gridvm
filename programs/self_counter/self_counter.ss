@@ -4,7 +4,7 @@ SET $limit $argv[1]
 SET $direction 1
 SET $counter 0
 
-L1  ADD $counter 1
+L1  ADD $counter $counter $direction
     PRN "[SEND] Counter=" $counter
     SND $argv[0] $counter
     RCV $argv[0] $counter

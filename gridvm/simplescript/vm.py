@@ -135,6 +135,7 @@ class SimpleScriptInterpreter(object):
         self._running = True
         while self._running:
             instruction = self._code.instructions[self._pc]
+            #print(instruction)
             try:
                 function = '_' + instruction.opcode.name.lower()
                 getattr(self, function)(instruction.arg)
