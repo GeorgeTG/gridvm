@@ -1,16 +1,33 @@
 import pickle
 import lzma
+import time
 from pathlib import Path
 
 from .parser.ss_parser import SimpleScriptParser
 from .codegen.ss_generator import SimpleScriptGenerator
 from .codegen.ss_code import SimpleScriptCodeObject
-from .codegen.ss_bcode import OpCode
+from .codegen.ss_bcode import OpCode, Operation
 
 MAGIC = 0xC0DE10CC
 
+ARITHM_OP_TABLE =  [
+        lambda x, y: x + y,
+        lambda x, y: x - y,
+        lambda x, y: x * y,
+        lambda x, y: x / y,
+        lambda x, y: x % y
+        ]
+
+COMP_OP_TABLE = [
+        lambda x, y: x > y,
+        lambda x, y: x >= y,
+        lambda x, y: x < y,
+        lambda x, y: x <= y,
+        lambda x, y: x == y
+        ]
+
 class SimpleScriptInterpreter(object):
-    def __init__(self):
+    def __init__(self, communication=None):
         self._pc = 0
         self._code = None
         self._vars = {}
@@ -18,6 +35,8 @@ class SimpleScriptInterpreter(object):
         self._stack = []
 
         self._running = False
+
+        self._comms = communication or EchoCommunication()
 
     def _just_load(self, source_file):
         with source_file.open('r') as f:
@@ -41,6 +60,7 @@ class SimpleScriptInterpreter(object):
         # if the file is small enough skip filesystem stuff
         if stat.st_size < 500:
             self._just_load(source_file)
+            return
 
         # myprogram.ss -> .myprogram.ssc
         name = source_file.stem
@@ -50,7 +70,8 @@ class SimpleScriptInterpreter(object):
             # code object file must exist and be newer than source to be up to date
             self.load_code_object(str(code_object))
         else:
-            # open the original source code
+            # outdated or non-existant code object
+            print('Building bytecode')
             with source_file.open('r') as f:
                 source = f.read()
 
@@ -69,7 +90,6 @@ class SimpleScriptInterpreter(object):
     def load_code_object(self, filename):
         self._code = SimpleScriptCodeObject.from_file(filename, decompress=True)
 
-
     def dump_state(self):
         state = (self._pc,
                 self._vars,
@@ -87,16 +107,44 @@ class SimpleScriptInterpreter(object):
         state = pickle.loads(buff[4:])
         (self._pc, self._vars, self._arrays, self._stack) = state
 
-    def run(self, argv=[]):
+    def print_state(self):
+        print('stack:')
+        print(self._stack)
+        print('consts:')
+        for i, var in enumerate(self._code.co_consts):
+            print(i, var)
+        print('vars memory dump: ')
+        for index, value in self._vars.items():
+            # print var_name, value
+            print(self._code.co_vars[index], value)
+        print('arrays memory dump: ')
+        for index, value in self._arrays.items():
+            # print var_name, value
+            print(self._code.co_arrays[index], value)
+
+
+    def run(self, argv):
         if not self._code:
             raise RuntimeError("No code loaded")
+
+        #argv
+        print(argv)
+        self._arrays[0] = argv
+        self._vars[0] = len(argv)
 
         self._running = True
         while self._running:
             instruction = self._code.instructions[self._pc]
-            print(instruction)
-            function = '_' + instruction.opcode.name.lower()
-            getattr(self, function)(instruction.arg)
+            try:
+                function = '_' + instruction.opcode.name.lower()
+                getattr(self, function)(instruction.arg)
+            except Exception as ex:
+                print('Execution failed!')
+                print('Reason: ', ex.__class__.__name__, str(ex))
+
+                print('State dump: ')
+                self.print_state()
+                return
 
             self._pc += 1
 
@@ -114,24 +162,93 @@ class SimpleScriptInterpreter(object):
     def _store_var(self, arg):
         self._vars[arg] = self._stack.pop()
 
+    def _build_array(self, arg):
+        self._arrays[arg] = {}
+        # build only once
+        # replace instruction with nop
+        self._code.instructions[self._pc] = Operation(OpCode.NOP)
+
+    def _store_array(self, arg):
+        index = self._stack.pop()
+        self._arrays[arg][index] = self._stack.pop()
+
+    def _load_array(self, arg):
+        index = self._stack.pop()
+        self._stack.append(self._arrays[arg][index])
+
     def _prn(self, arg):
-        print(self._stack)
-        format = self._code.co_consts[self._stack.pop()]
         vect = []
 
         for i in range(arg):
             vect.append(self._stack.pop())
 
-        print(format, vect)
+        format = self._code.co_consts[self._stack.pop()]
+        print(format, ', '.join(str(arg) for arg in reversed(vect)))
+
+    def _arithm(self, arg):
+        var2 = self._stack.pop()
+        var1 = self._stack.pop()
+        self._stack.append(ARITHM_OP_TABLE[arg](var1, var2))
+
+    def _compare_op(self, arg):
+        var2 = self._stack.pop()
+        var1 = self._stack.pop()
+        self._stack.append(COMP_OP_TABLE[arg](var1, var2))
+
+    def _jmp(self, arg):
+        new_index = self._code.co_labels[arg]
+        self._pc = new_index - 1 # we want the next instruction to be new index
+
+    def _jmp_if_true(self, arg):
+        if self._stack.pop():
+            new_index = self._code.co_labels[arg]
+            self._pc = new_index - 1 # we want the next instruction to be new index
+
+    def _rcv(self, arg=None):
+        who = self._stack.pop()
+        msg = self._comms.recv(who)
+        self._stack.append(msg)
+
+    def _snd(self, arg=None):
+        send_what = self._stack.pop()
+        send_to = self._stack.pop()
+        self._comms.snd(send_to, send_what)
+
+    def _slp(self, arg):
+        time.sleep(self._stack.pop())
+
+    def _nop(self, arg):
+        pass
 
     def _ret(self, arg=None):
         self._running = False
+
+class EchoCommunication(object):
+    def __init__(self):
+        self._messages = {}
+
+    def recv(self, who):
+        queue = self._messages.setdefault(who, list())
+
+        try:
+            return queue.pop()
+        except IndexError:
+            return 0
+
+
+    def snd(self, to, what):
+        queue = self._messages.setdefault(to, list())
+        queue.insert(0, what)
 
 if __name__ == '__main__':
     import sys
     inter = SimpleScriptInterpreter()
     inter.load_source(sys.argv[1])
 
-    inter.run([])
+    argv = sys.argv[2:] # remove interpreter name and filepath
+    argv.insert(0, 0) # thread name
 
-    print(inter._vars)
+    # convert to integers
+    argv = list((int(arg) for arg in argv))
+
+    inter.run(argv)

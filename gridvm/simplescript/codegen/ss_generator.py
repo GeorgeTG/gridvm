@@ -5,11 +5,11 @@ from ..parser.ss_ast import *
 from ..ss_exception import GeneratorException
 
 ARITHM_TABLE = {
-        'ADD' : OpCode.ADD,
-        'SUB' : OpCode.SUB,
-        'MUL' : OpCode.MUL,
-        'DIV' : OpCode.DIV,
-        'MOD' : OpCode.MOD,
+        'ADD' : 0,
+        'SUB' : 1,
+        'MUL' : 2,
+        'DIV' : 3,
+        'MOD' : 4,
         }
 
 BRANCH_CMP_OPS = {
@@ -56,10 +56,16 @@ class SimpleScriptGenerator(object):
             try:
                 label_index = self.label_defs[instruction.arg]
 
-                # add index to jump table
-                labels.append(label_index)
+                try:
+                    # more than one refs exist
+                    index = labels.index(label_index)
+                except ValueError:
+                    # add index to jump table
+                    labels.append(label_index)
+                    index = len(labels) - 1
+
                 # replace the arg, with the table's index
-                instruction.arg = len(labels) - 1
+                instruction.arg = index
             except KeyError:
                 # No such label
                 self.fail('Label "{}" not defined'.format(instruction.arg))
@@ -157,7 +163,7 @@ class SimpleScriptGenerator(object):
         self.visit(node.var2)
         self.visit(node.var3)
 
-        self.add_instruction(ARITHM_TABLE[node.op])
+        self.add_instruction(OpCode.ARITHM, ARITHM_TABLE[node.op])
 
         self.build(node.var1)
 
@@ -191,10 +197,13 @@ class SimpleScriptGenerator(object):
         self.add_instruction(OpCode.SLP)
 
     def visit_PrintOperation(self, node):
-        self.consts.append(node.formatter)
+        try:
+            # avoid duplicate strings in consts
+            value = self.consts.index(node.formatter)
+        except ValueError:
+            self.consts.append(node.formatter)
+            value = len(self.consts) - 1
 
-        # load the index of the string in the stack
-        value = len(self.consts) - 1
         try:
             index = self.consts.index(value)
         except ValueError:
@@ -206,6 +215,7 @@ class SimpleScriptGenerator(object):
         vector = node.vect or [] # can be None
         for name, child in node.children():
             self.visit(child)
+
         self.add_instruction(OpCode.PRN, len(vector))
 
     def visit_Ret(self, node):

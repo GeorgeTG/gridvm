@@ -46,17 +46,13 @@ class OpCode(IntEnum):
     BUILD_VAR    = 5
     BUILD_ARRAY  = 6
     ROT_TWO      = 7
-    ADD          = 8
-    SUB          = 9
-    MUL          = 10
-    DIV          = 11
-    MOD          = 12
-    COMPARE_OP   = 13
-    JMP_IF_TRUE  = 14
-    JMP          = 15
-    SND         = 16
-    RCV          = 17
-    SLP          = 18
-    PRN          = 19
-    RET          = 20
-
+    ARITHM       = 8
+    COMPARE_OP   = 9
+    JMP_IF_TRUE  = 10
+    JMP          = 11
+    SND          = 12
+    RCV          = 13
+    SLP          = 14
+    PRN          = 15
+    RET          = 16
+    NOP          = 17

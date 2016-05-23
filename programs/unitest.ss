@@ -90,6 +90,7 @@ L8 SET $array[$i] 1
    SET $i 0
 L9 BGT $array[$i] 1 L7
    BLT $array[$i] 1 L7
+   ADD $i $i 1
    BLT $i 100 L9
    
    PRN "SUCCESS"
