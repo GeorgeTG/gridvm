@@ -44,7 +44,10 @@ class SimpleScriptGenerator(object):
         self.instructions = []
 
     def add_instruction(self, *args):
-        self.instructions.append(Operation(*args))
+        if len(args) == 1:
+            self.instructions.append(Operation(args[0].value))
+        else:
+            self.instructions.append(Operation(args[0].value, args[1]))
 
     def fail(self, cause):
         raise GeneratorException(self.next_line, cause)

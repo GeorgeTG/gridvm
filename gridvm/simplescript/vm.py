@@ -1,6 +1,7 @@
 import pickle
 import lzma
 import time
+import collections
 from pathlib import Path
 
 from .parser.ss_parser import SimpleScriptParser
@@ -32,11 +33,34 @@ class SimpleScriptInterpreter(object):
         self._code = None
         self._vars = {}
         self._arrays = {}
-        self._stack = []
+        self._stack = collections.deque()
 
         self._running = False
 
         self._comms = communication or EchoCommunication()
+
+
+        self.__map = [
+                self._load_const,
+                self._load_var,
+                self._store_var,
+                self._load_array,
+                self._store_array,
+                self._build_var,
+                self._build_array,
+                self._rot_two,
+                self._arithm,
+                self._compare_op,
+                self._jmp_if_true,
+                self._jmp,
+                self._snd,
+                self._rcv,
+                self._slp,
+                self._prn,
+                self._ret,
+                self._nop
+                ]
+
 
     def _just_load(self, source_file):
         with source_file.open('r') as f:
@@ -128,17 +152,19 @@ class SimpleScriptInterpreter(object):
             raise RuntimeError("No code loaded")
 
         #argv
-        print(argv)
         self._arrays[0] = argv
         self._vars[0] = len(argv)
 
         self._running = True
         while self._running:
-            instruction = self._code.instructions[self._pc]
-            #print(instruction)
             try:
-                function = '_' + instruction.opcode.name.lower()
-                getattr(self, function)(instruction.arg)
+                instruction = self._code.instructions[self._pc]
+                #print(instruction)
+            except IndexError:
+                print("Program finished without calling RET!")
+                return
+            try:
+                self.__map[instruction.opcode](instruction.arg)
             except Exception as ex:
                 print('Execution failed!')
                 print('Reason: ', ex.__class__.__name__, str(ex))
@@ -167,7 +193,7 @@ class SimpleScriptInterpreter(object):
         self._arrays[arg] = {}
         # build only once
         # replace instruction with nop
-        self._code.instructions[self._pc] = Operation(OpCode.NOP)
+        self._code.instructions[self._pc] = Operation(OpCode.NOP.value)
 
     def _store_array(self, arg):
         index = self._stack.pop()
@@ -202,8 +228,8 @@ class SimpleScriptInterpreter(object):
 
     def _jmp_if_true(self, arg):
         if self._stack.pop():
-            new_index = self._code.co_labels[arg]
-            self._pc = new_index - 1 # we want the next instruction to be new index
+            # we want the next instruction to be new index
+            self._pc = self._code.co_labels[arg] -1
 
     def _rcv(self, arg=None):
         who = self._stack.pop()
@@ -219,6 +245,9 @@ class SimpleScriptInterpreter(object):
         time.sleep(self._stack.pop())
 
     def _nop(self, arg):
+        pass
+
+    def _rot_two(self, arg):
         pass
 
     def _ret(self, arg=None):
@@ -243,6 +272,8 @@ class EchoCommunication(object):
 
 if __name__ == '__main__':
     import sys
+    import cProfile
+
     inter = SimpleScriptInterpreter()
     inter.load_source(sys.argv[1])
 
@@ -251,5 +282,10 @@ if __name__ == '__main__':
 
     # convert to integers
     argv = list((int(arg) for arg in argv))
-
     inter.run(argv)
+    """
+    cProfile.run('inter.run(argv)', 'stats')
+    import pstats
+    p = pstats.Stats('stats')
+    p.strip_dirs().sort_stats('time').print_stats()
+    """

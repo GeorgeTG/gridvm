@@ -1,7 +1,5 @@
-import struct
 from enum import IntEnum, unique
 
-OPERATION_FMT = 'BH'
 
 class Operation(object):
     __slots__ = ('opcode', 'arg', 'line_no', '__weakref__')
@@ -18,23 +16,13 @@ class Operation(object):
         else:
             repr += ' ' * 5
 
-        repr += '[{:2d}]{}'.format(self.opcode.value, self.opcode.name).ljust(18)
+        opcode = OpCode(self.opcode)
+        repr += '[{:2d}]{}'.format(opcode.value, opcode.name).ljust(18)
 
         if self.arg is not None:
             repr += str(self.arg)
 
         return repr
-
-    def to_bytes(self):
-        arg = self.arg if self.arg else 0
-        return struct.pack(OPERATION_FMT, self.opcode.value, arg)
-
-    @classmethod
-    def from_bytes(cls, buff):
-        opcode, arg = struct.unpack(OPERATION_FMT)
-        opcode = OpCode(opcode)
-
-        return cls(opcode, arg)
 
 @unique
 class OpCode(IntEnum):
