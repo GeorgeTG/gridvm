@@ -76,9 +76,10 @@ class ThreadInfo(object):
         self.args = args
 
 class ProgramInfo(object):
-    def __init__(self, filename):
+    def __init__(self, filename, runtime_id):
         self._filepath = Path(filename).resolve()
-        self._program_id = fast_hash(str(self._filepath))
+        self._name = self._filepath.name
+        self._program_id = '{}:{}'.format(str(self._name), runtime_id)
 
     def parse(self):
         threads = list()
@@ -88,7 +89,7 @@ class ProgramInfo(object):
                 raise ValueError('Bad file')
             total_threads = int(first_line[1])
             for i in range(total_threads):
-                #FIXME: FIlename may contain spaces....
+                #FIXME: Filename may contain spaces....
                 line_parts = f.readline().rstrip('\n').split()
                 threads.append(self._parse_thread_line(i, line_parts))
 

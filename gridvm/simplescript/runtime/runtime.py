@@ -2,13 +2,19 @@ import pickle
 import lzma
 import time
 
-from .source import ProgramInfo, generic_load
-from .inter import SimpleScriptInterpreter, InterpreterStatus
+from datetime import datetime
 
-from .utils import get_thread_uid
+from ...logger import get_logger
+from .inter import SimpleScriptInterpreter, InterpreterStatus
+from .source import ProgramInfo, generic_load
+from .utils import get_thread_uid, fast_hash
 
 class Runtime(object):
     def __init__(self):
+        # Generate unique id for each runtime (even in same pc)
+        self.id = fast_hash( datetime.now().isoformat(), length=4)
+        self.logger = get_logger('{}:Runtime'.format(self.id))
+
         self.threads = dict()
 #        self.threads_by_program = dict()
 
@@ -17,11 +23,18 @@ class Runtime(object):
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
 
-        info = ProgramInfo(filename)
+        self.logger.debug('Loading program "{}"...'.format(filename))
+        info = ProgramInfo(filename, self.id)
         program_thread_info = info.parse()
 
         for thread_info in program_thread_info:
+            self.logger.debug('Creating thread [{}]:{}...'.format(
+                thread_info.program_id,
+                thread_info.id
+            ))
             self.create_thread(thread_info)
+
+        self.logger.info('Program loaded successfully!')
 
     def create_thread(self, thread_info):
         """ Create a thread from ThreadInfo"""
@@ -53,9 +66,8 @@ class Runtime(object):
         thread_uid = get_thread_uid(package.program_id, package.thread_id)
         self.threads[thread_uid] = context
 
-
     def get_next_round(self):
-        """ Generate a run list and yield threads in a round-robbin fashion """
+        """ Generate a run list and yield threads in a round-robin fashion """
         #FIXME: this is bad
         run_list = []
         total_blocked = 0
@@ -96,9 +108,13 @@ class Runtime(object):
                         context.thread_id,
                         context.program_id))
                     print(str(ex))
-                    return
+
+                    self.shutdown()
 
             list = self.get_next_round()
+
+    def shutdown(self):
+        return
 
 class EchoCommunication(object):
     def __init__(self):
