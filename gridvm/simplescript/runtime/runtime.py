@@ -68,31 +68,31 @@ class Runtime(object):
 
     def get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
-        #FIXME: this is bad
-        run_list = []
-        total_blocked = 0
+        #FIXME: this is less bad :)
+        run_list = [ ]
         for thread_id, context in self.threads.items():
             status = context.interpreter.status
             if status == InterpreterStatus.RUNNING:
                 run_list.append(context)
-            elif status == InterpreterStatus.SLEEPING:
-                if time.time() >= context.interpreter.wake_up_at:
-                    # wkae this one up
+
+            elif (status == InterpreterStatus.SLEEPING and
+                    time.time() >= context.interpreter.wake_up_at):
+                    # wake this one up
                     context.interpreter.status = InterpreterStatus.RUNNING
                     run_list.append(context)
-                else:
-                    continue
-            elif status == InterpreterStatus.BLOCKED:
-                if self._comms.can_recv(context.interpreter.waiting_from):
+
+            elif (status == InterpreterStatus.BLOCKED and
+                    self._comms.can_recv(context.interpreter.waiting_from)):
                     # can unblock
                     context.interpreter.status = InterpreterStatus.RUNNING
                     run_list.append(context)
-                else:
-                    total_blocked += 1
-                    continue
 
-        if total_blocked == len(self.threads):
-            print("DEADLOCK! ABORTING!")
+        if len(run_list) == 0 and all( # Needs better indentation :P
+                context.interpreter.status == InterpreterStatus.BLOCKED
+                for _, context in self.threads.items() ):
+            self.logger.error("DEADLOCK! ABORTING!")
+            self.shutdown()
+
         return run_list
 
     def run(self):
@@ -104,10 +104,10 @@ class Runtime(object):
                 try:
                     context.interpreter.exec_next()
                 except Exception as ex:
-                    print('Thread {} of program {} failed!'.format(
+                    self.logger.error('Thread {} of program {} failed!'.format(
                         context.thread_id,
                         context.program_id))
-                    print(str(ex))
+                    self.logger.error(str(ex))
 
                     self.shutdown()
 
