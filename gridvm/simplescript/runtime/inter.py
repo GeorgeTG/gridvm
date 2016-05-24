@@ -204,7 +204,7 @@ class SimpleScriptInterpreter(object):
 
     def _slp(self, arg):
         self.wake_up_at = time.time() + self._stack.pop()
-        self._status.SLEEPING
+        self._status = InterpreterStatus.SLEEPING
 
     def _nop(self, arg):
         pass
@@ -214,6 +214,3 @@ class SimpleScriptInterpreter(object):
 
     def _ret(self, arg=None):
         self._status = InterpreterStatus.FINISHED
-
-
-
