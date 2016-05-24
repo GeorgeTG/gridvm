@@ -1,0 +1,4 @@
+#SIMPLESCRIPT_MULTITHREADED 3
+#THREAD "self_counter.ss" 10
+#THREAD "self_counter.ss" 20
+#THREAD "self_counter.ss" 30

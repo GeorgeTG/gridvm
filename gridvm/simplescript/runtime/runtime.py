@@ -69,34 +69,49 @@ class Runtime(object):
     def get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
         #FIXME: this is less bad :)
+
         run_list = [ ]
-        total_blocked = 0
-        for thread_id, context in self.threads.items():
-            status = context.interpreter.status
+        while not run_list:
+            # Keep track of threads status
+            total_blocked = 0
+            total_sleeping = 0
+            total_finished = 0
 
-            if status == InterpreterStatus.RUNNING:
-                run_list.append(context)
+            for thread_id, context in self.threads.items():
+                status = context.interpreter.status
 
-            elif (status == InterpreterStatus.SLEEPING and
-                    time.time() >= context.interpreter.wake_up_at):
-                # wake this one up
-                context.interpreter.status = InterpreterStatus.RUNNING
-                run_list.append(context)
+                if status == InterpreterStatus.RUNNING:
+                    run_list.append(context)
 
-            elif (status == InterpreterStatus.BLOCKED and
-                    self._comms.can_recv(context.interpreter.waiting_from)):
-                # can unblock
-                context.interpreter.status = InterpreterStatus.RUNNING
-                run_list.append(context)
+                elif (status == InterpreterStatus.SLEEPING and
+                        time.time() >= context.interpreter.wake_up_at):
+                    # wake this one up
+                    context.interpreter.status = InterpreterStatus.RUNNING
+                    run_list.append(context)
 
-            elif (status == InterpreterStatus.BLOCKED or
-                    status == InterpreterStatus.FINISHED):
-                total_blocked += 1
+                elif (status == InterpreterStatus.BLOCKED and
+                        self._comms.can_recv(context.interpreter.waiting_from)):
+                    # can unblock
+                    context.interpreter.status = InterpreterStatus.RUNNING
+                    run_list.append(context)
 
+                elif status == InterpreterStatus.BLOCKED:
+                    total_blocked += 1
 
-        if total_blocked == len(self.threads):
-            self.logger.error("DEADLOCK! ABORTING!")
-            self.shutdown()
+                elif status == InterpreterStatus.SLEEPING:
+                    total_sleeping += 1
+
+                elif status == InterpreterStatus.FINISHED:
+                    total_finished += 1
+
+            if total_blocked == len(self.threads) - total_finished:
+                self.logger.error("DEADLOCK! ABORTING!")
+                self.shutdown()
+                break
+
+            if total_sleeping == len(self.threads) - total_finished:
+                self.logger.debug("All threads are sleeping...")
+                time.sleep(0.1)
 
         return run_list
 
