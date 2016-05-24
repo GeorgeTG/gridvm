@@ -70,26 +70,31 @@ class Runtime(object):
         """ Generate a run list and yield threads in a round-robin fashion """
         #FIXME: this is less bad :)
         run_list = [ ]
+        total_blocked = 0
         for thread_id, context in self.threads.items():
             status = context.interpreter.status
+
             if status == InterpreterStatus.RUNNING:
                 run_list.append(context)
 
             elif (status == InterpreterStatus.SLEEPING and
                     time.time() >= context.interpreter.wake_up_at):
-                    # wake this one up
-                    context.interpreter.status = InterpreterStatus.RUNNING
-                    run_list.append(context)
+                # wake this one up
+                context.interpreter.status = InterpreterStatus.RUNNING
+                run_list.append(context)
 
             elif (status == InterpreterStatus.BLOCKED and
                     self._comms.can_recv(context.interpreter.waiting_from)):
-                    # can unblock
-                    context.interpreter.status = InterpreterStatus.RUNNING
-                    run_list.append(context)
+                # can unblock
+                context.interpreter.status = InterpreterStatus.RUNNING
+                run_list.append(context)
 
-        if len(run_list) == 0 and all( # Needs better indentation :P
-                context.interpreter.status == InterpreterStatus.BLOCKED
-                for _, context in self.threads.items() ):
+            elif (status == InterpreterStatus.BLOCKED or
+                    status == InterpreterStatus.FINISHED):
+                total_blocked += 1
+
+
+        if total_blocked == len(self.threads):
             self.logger.error("DEADLOCK! ABORTING!")
             self.shutdown()
 
