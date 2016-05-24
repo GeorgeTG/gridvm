@@ -7,6 +7,9 @@ def reverse_find(haystack, needle, index):
         return -1
 
 
+class BlockedOperation(Exception):
+    pass
+
 class CodeException(Exception):
     def __init__(self, source, pos, lineno, total, message):
         start = reverse_find(source, '\n', pos-1)

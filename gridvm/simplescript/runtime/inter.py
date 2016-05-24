@@ -1,13 +1,18 @@
-import pickle
-import lzma
 import time
 import collections
 from pathlib import Path
+from enum import IntEnum, unique
 
-from .parser.ss_parser import SimpleScriptParser
-from .codegen.ss_generator import SimpleScriptGenerator
-from .codegen.ss_code import SimpleScriptCodeObject
-from .codegen.ss_bcode import OpCode, Operation
+from ..codegen.ss_bcode import OpCode, Operation
+from ..ss_exception import BlockedOperation
+
+@unique
+class InterpreterStatus(IntEnum):
+    RUNNING = 0,
+    SLEEPING = 1,
+    BLOCKED = 2,
+    STOPPED = 3,
+    FINISHED = 4
 
 MAGIC = 0xC0DE10CC
 
@@ -28,17 +33,14 @@ COMP_OP_TABLE = [
         ]
 
 class SimpleScriptInterpreter(object):
-    def __init__(self, communication=None):
+    def __init__(self, code, communication):
         self._pc = 0
-        self._code = None
-        self._vars = {}
-        self._arrays = {}
+        self._code = code
+        self._vars = dict()
+        self._arrays = dict()
         self._stack = collections.deque()
-
-        self._running = False
-
-        self._comms = communication or EchoCommunication()
-
+        self._comms = communication
+        self._status = InterpreterStatus.STOPPED
 
         self.__map = [
                 self._load_const,
@@ -61,75 +63,28 @@ class SimpleScriptInterpreter(object):
                 self._nop
                 ]
 
+    @property
+    def code(self):
+        return self._code
 
-    def _just_load(self, source_file):
-        with source_file.open('r') as f:
-            source = f.read()
+    @property
+    def status(self):
+        return self._status
 
-        # parse source into tree
-        parser = SimpleScriptParser()
-        tree = parser.parse(source)
+    @status.setter
+    def status(self, value):
+        self._status = value
 
-        # generate bytecode
-        gen = SimpleScriptGenerator()
-        code = gen.generate(tree)
-
-        self._code = code
-
-    def load_source(self, filename):
-        source_file = Path(filename).resolve()
-        stat = source_file.stat()
-        source_ts = stat.st_mtime
-
-        # if the file is small enough skip filesystem stuff
-        if stat.st_size < 500:
-            self._just_load(source_file)
-            return
-
-        # myprogram.ss -> .myprogram.ssc
-        name = source_file.stem
-        code_object = source_file.parent / ('.' + name + '.ssc')
-
-        if code_object.is_file() and code_object.stat().st_mtime > source_ts:
-            # code object file must exist and be newer than source to be up to date
-            self.load_code_object(str(code_object))
-        else:
-            # outdated or non-existant code object
-            print('Building bytecode')
-            with source_file.open('r') as f:
-                source = f.read()
-
-            # parse source into tree
-            parser = SimpleScriptParser()
-            tree = parser.parse(source)
-
-            # generate bytecode
-            gen = SimpleScriptGenerator()
-            code = gen.generate(tree)
-
-            # save for future use
-            code.to_file(str(code_object), compress=True)
-            self._code = code
-
-    def load_code_object(self, filename):
-        self._code = SimpleScriptCodeObject.from_file(filename, decompress=True)
-
-    def dump_state(self):
-        state = (self._pc,
+    def save_state(self):
+        return  (self._pc,
                 self._vars,
                 self._arrays,
-                self._stack)
-        return lzma.compress(
-            MAGIC.to_bytes(4, byteorder='big') +
-            pickle.dumps(state, pickle.HIGHEST_PROTOCOL)
-        )
+                self._stack,
+                self._status.value)
 
     def load_state(self, state):
-        buff = lzma.decompress(state)
-        if int.from_bytes(buff[:4], byteorder='big') != MAGIC:
-            raise ValueError('Invalid state')
-        state = pickle.loads(buff[4:])
-        (self._pc, self._vars, self._arrays, self._stack) = state
+        (self._pc, self._vars, self._arrays, self._stack, status_code) = state
+        self._status = InterpreterStatus(status_code)
 
     def print_state(self):
         print('stack:')
@@ -146,17 +101,12 @@ class SimpleScriptInterpreter(object):
             # print var_name, value
             print(self._code.co_arrays[index], value)
 
-
-    def run(self, argv):
-        if not self._code:
-            raise RuntimeError("No code loaded")
-
-        #argv
+    def start(self, argv):
         self._arrays[0] = argv
         self._vars[0] = len(argv)
+        self._status = InterpreterStatus.RUNNING
 
-        self._running = True
-        while self._running:
+    def exec_next(self):
             try:
                 instruction = self._code.instructions[self._pc]
                 #print(instruction)
@@ -165,14 +115,19 @@ class SimpleScriptInterpreter(object):
                 return
             try:
                 self.__map[instruction.opcode](instruction.arg)
+            except BlockedOperation:
+                self._status = InterpreterStatus.BLOCKED
+                # don't increment PC
+                return
             except Exception as ex:
                 print('Execution failed!')
-                print('Reason: ', ex.__class__.__name__, str(ex))
+                print('Instruction: {}'.format(str(self._code.instructions[self._pc])))
+                print('Reason: ', ex.__class__.__name__, " - ", str(ex))
 
                 print('State dump: ')
                 self.print_state()
-                return
 
+                raise
             self._pc += 1
 
 
@@ -234,6 +189,12 @@ class SimpleScriptInterpreter(object):
     def _rcv(self, arg=None):
         who = self._stack.pop()
         msg = self._comms.recv(who)
+        if msg == None:
+            # re-insert address in stack
+            self._stack.append(who)
+
+            self.waiting_from = who
+            raise BlockedOperation
         self._stack.append(msg)
 
     def _snd(self, arg=None):
@@ -242,7 +203,8 @@ class SimpleScriptInterpreter(object):
         self._comms.snd(send_to, send_what)
 
     def _slp(self, arg):
-        time.sleep(self._stack.pop())
+        self.wake_up_at = time.time() + self._stack.pop()
+        self._status.SLEEPING
 
     def _nop(self, arg):
         pass
@@ -251,41 +213,7 @@ class SimpleScriptInterpreter(object):
         pass
 
     def _ret(self, arg=None):
-        self._running = False
-
-class EchoCommunication(object):
-    def __init__(self):
-        self._messages = {}
-
-    def recv(self, who):
-        queue = self._messages.setdefault(who, list())
-
-        try:
-            return queue.pop()
-        except IndexError:
-            return 0
+        self._status = InterpreterStatus.FINISHED
 
 
-    def snd(self, to, what):
-        queue = self._messages.setdefault(to, list())
-        queue.insert(0, what)
 
-if __name__ == '__main__':
-    import sys
-    import cProfile
-
-    inter = SimpleScriptInterpreter()
-    inter.load_source(sys.argv[1])
-
-    argv = sys.argv[2:] # remove interpreter name and filepath
-    argv.insert(0, 0) # thread name
-
-    # convert to integers
-    argv = list((int(arg) for arg in argv))
-    inter.run(argv)
-    """
-    cProfile.run('inter.run(argv)', 'stats')
-    import pstats
-    p = pstats.Stats('stats')
-    p.strip_dirs().sort_stats('time').print_stats()
-    """
