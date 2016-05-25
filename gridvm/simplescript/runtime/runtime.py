@@ -24,7 +24,7 @@ class Runtime(object):
         """ Load a program description  from a .mtss file """
 
         self.logger.debug('Loading program "{}"...'.format(filename))
-        info = ProgramInfo(filename, self.id)
+        info = ProgramInfo(filename)
         program_thread_info = info.parse()
 
         for thread_info in program_thread_info:
@@ -203,5 +203,11 @@ class ThreadPackage(object):
 if __name__ == '__main__':
     import sys
     runtime = Runtime()
-    runtime.load_program(sys.argv[1])
-    runtime.run()
+
+    if len(sys.argv) == 1:
+        print('No program has been given..')
+
+    else:
+        for i in range(len(sys.argv) - 1):
+            runtime.load_program(sys.argv[i+1])
+        runtime.run()

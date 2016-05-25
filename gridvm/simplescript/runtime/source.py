@@ -1,3 +1,4 @@
+import time
 from pathlib import Path
 
 from ..parser.ss_parser import SimpleScriptParser
@@ -76,10 +77,13 @@ class ThreadInfo(object):
         self.args = args
 
 class ProgramInfo(object):
-    def __init__(self, filename, runtime_id):
+    def __init__(self, filename):
         self._filepath = Path(filename).resolve()
         self._name = self._filepath.name
-        self._program_id = '{}:{}'.format(str(self._name), runtime_id)
+        self._program_id = '{}:{}'.format(
+            str(self._name),
+            fast_hash(str(time.time()), length=4)
+        )
 
     def parse(self):
         threads = list()

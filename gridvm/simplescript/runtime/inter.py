@@ -111,25 +111,29 @@ class SimpleScriptInterpreter(object):
                 instruction = self._code.instructions[self._pc]
                 #print(instruction)
             except IndexError:
-                print("Program finished without calling RET!")
-                return
+                raise RuntimeError("Program finished without calling RET!")
+
             try:
                 self.__map[instruction.opcode](instruction.arg)
             except BlockedOperation:
                 self._status = InterpreterStatus.BLOCKED
-                # don't increment PC
-                return
+                return # don't increment PC
             except Exception as ex:
-                print('Execution failed!')
-                print('Instruction: {}'.format(str(self._code.instructions[self._pc])))
-                print('Reason: ', ex.__class__.__name__, " - ", str(ex))
+                error_msg =  'Execution failed!\n'
+                error_msg += 'Instruction: {}\n'.format(str(self._code.instructions[self._pc]))
+                error_msg += 'Reason: {} - {}\n'.format(ex.__class__.__name__, str(ex))
 
                 print('State dump: ')
                 self.print_state()
 
-                raise
-            self._pc += 1
+                raise RuntimeError(error_msg)
 
+            # TODO: add function that should be executed right after a command
+            #       (e.g) when a state changes it should send a msg to the
+            #       coresponding vm or when a print occures, the printing must
+            #       happen in the responsible vm
+
+            self._pc += 1
 
     ##### INSTRUCTIONS #####
     def _load_const(self, arg):
