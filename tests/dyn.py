@@ -6,6 +6,7 @@ import sys
 import time
 import zmq
 
+from gridvm.logger import get_logger
 from gridvm.network.protocol.packet.packet import Packet
 from gridvm.network.protocol.packet.factory import make_packet, make_packet
 from gridvm.network.protocol.packet.ptype  import PacketType
@@ -16,6 +17,8 @@ PORT = 19999
 class DistrSys:
     def __init__(self, net_interface):
         self.runtime_id = fast_hash(str(time.time()))
+        self.logger = get_logger('{}:NetHandler'.format(self.runtime_id))
+
         self.packet_storage = { type: [ ] for type in list(PacketType) }
         self.send_packets = set()
         self.runtimes = set()
@@ -53,9 +56,9 @@ class DistrSys:
         # Add myself to runtimes
         self.runtimes.add( (self.ip, self.port, self.runtime_id) )
 
-    def discover(self):
+    def start(self):
         # Send DISCOVER_REQ packet through multicast
-        print ('Send DISCOVER...')
+        self.logger.debug('Broadcast DISCOVER...')
         pkt = make_packet(
             PacketType.DISCOVER_REQ,
             ip=self.ip,
@@ -63,10 +66,10 @@ class DistrSys:
             runtime_id=self.runtime_id
         )
         self.send_packet(pkt)
-        print('Done...')
 
         while True:
             try:
+                self.logger.debug('Waiting for packets...')
                 data = self.recv_packet([
                     PacketType.DISCOVER_REQ,
                     PacketType.DISCOVER_REP,
@@ -75,13 +78,13 @@ class DistrSys:
                     PacketType.PRINT
                 ], timeout=2000)
             except KeyboardInterrupt:
-                print('Request shutdown..')
+                self.logger.info('Request shutdown...')
 
                 if len(self.runtimes) == 1:
                     break # I am the only one
 
-                print('Signaling other runtimes...')
                 # Broadcast SHUTDOWN_REQ packet
+                self.logger.info('Signaling other runtimes...')
                 pkt = make_packet(
                     PacketType.SHUTDOWN_REQ,
                     ip=self.ip,
@@ -91,29 +94,29 @@ class DistrSys:
                 self.send_packet(pkt)
                 continue
 
-            if not data:
+            if not data: ##### DEBUGGING
                 self.print_runtimes()
                 continue
 
             addr, packet = data
-            print('Got new message from {}'.format(
-                addr if addr else 'multicast'
+            self.logger.debug('Got packet "{}" from {}'.format(
+                PacketType(packet.type).name, 'peer' if addr else 'multicast'
             ))
-            print(packet)
+            self.logger.debug(packet)
 
             if packet.type == PacketType.PRINT:
                 self.print_runtimes()
                 continue
 
+            # TODO: Split into functions
             ip, port, runtime_id = packet['ip'], packet['port'], packet['runtime_id']
 
-            # TODO: Split into functions
             if packet.type == PacketType.DISCOVER_REQ:
                 # Save runtime data & listen for later requests
                 self.runtimes.add( (ip, port, runtime_id) )
 
                 # Send runtime info
-                print('Sending runtime info @ {}:{}'.format(ip, port))
+                self.logger.debug('Sending runtime info @ {}:{}'.format(ip, port))
                 pkt = make_packet(
                     PacketType.DISCOVER_REP,
                     ip=self.ip,
@@ -125,21 +128,21 @@ class DistrSys:
             elif packet.type == PacketType.DISCOVER_REP:
                 # Save runtime data & listen for this runtime requests
                 self.runtimes.add( (ip, port, packet['runtime_id']) )
-                print('Found company @ {}:{}'.format(ip, port))
+                self.logger.info('Found peer @ {}:{}'.format(ip, port))
 
             elif packet.type == PacketType.SHUTDOWN_REQ:
                 # Remove runtime entry
                 entry = (ip, port, runtime_id)
                 if entry not in self.runtimes:
-                    assert("Runtime {} not in {}'s table".format(
-                        runtime_id, self.runtime_id
+                    self.logger.warning("Peer {} not in my table".format(
+                        runtime_id
                     ))
                     continue
 
                 self.runtimes.remove(entry)
 
                 # Send SHUTDOWN_ACK
-                print('Sending SHUTDOWN_ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Sending SHUTDOWN_ACK @ {}:{}'.format(ip, port))
                 pkt = make_packet(
                     PacketType.SHUTDOWN_ACK,
                     ip=self.ip,
@@ -147,12 +150,12 @@ class DistrSys:
                     runtime_id=self.runtime_id
                 )
                 self.send_packet(pkt, addr=(ip, port))
-                print('Lost company @ {}:{}'.format(ip, port))
+                self.logger.info('Lost peer @ {}:{}'.format(ip, port))
 
             elif packet.type == PacketType.SHUTDOWN_ACK:
                 entry = (ip, port, runtime_id)
                 if entry not in self.runtimes:
-                    assert("Runtime {} not in {}'s table".format(
+                    self.logger.warning("Runtime {} not in {}'s table".format(
                         runtime_id, self.runtime_id
                     ))
                     continue
@@ -160,12 +163,12 @@ class DistrSys:
                 self.runtimes.remove(entry)
 
                 # Send ACK to sender
-                print('Sending ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
                 self.send_ack_reply(addr)
 
                 # Check if all runtimes have answered
                 if len(self.runtimes) <= 1:
-                    print('Signaled all other runtimes!')
+                    self.logger.info('Signaled all other runtimes!')
                     break
 
         # Closes all sockets
@@ -192,10 +195,11 @@ class DistrSys:
             self.req_sock.send(packet.to_bytes())
 
             # Await for ACK
-            print('SEND WAITING FOR ACK/WAIT')
+            self.logger.debug('Waiting for ACK/WAIT from {}:{}'.format(ip, port))
             pkt = self.req_sock.recv()
             pkt = Packet.from_bytes(pkt)
-            print(pkt)
+            self.logger.debug('Got {}!'.format(packet.type))
+            #print(pkt)
 
             # Check reply packet
             if pkt.type == PacketType.WAIT:
@@ -212,8 +216,8 @@ class DistrSys:
     def send_ack_reply(self, addr):
         """ Reply to sender (@ addr) with ACK """
         ack_pkt = make_packet(PacketType.ACK)
-        print(ack_pkt)
-        print(addr)
+        #print(ack_pkt)
+        #print(addr)
         self.rep_sock.send_multipart([
             addr,
             b'',
@@ -227,8 +231,8 @@ class DistrSys:
         if not isinstance(packet_types, list):
             packet_types = [ packet_types ]
 
-        # Check first if we have already recv that packet
-        # and it has been saved in storage
+        # Check first if we have already received a valid
+        # packet and it has been saved in the storage
         for ptype in packet_types:
             if len(self.packet_storage[ptype]) > 0:
                 return self.packet_storage[ptype].pop()
@@ -277,7 +281,7 @@ if __name__ == '__main__':
     #_, interface, local_ip = sys.argv
 
     ds = DistrSys('wlan0')
-    ds.discover()
+    ds.start()
 
     """
     while True:
