@@ -13,6 +13,9 @@ class PacketType(IntEnum):
 
     PRINT = 0b10000000
 
+    ACK = 0b11111111
+    WAIT = 0b11111110
+    
     """
     DISCOVER_THREAD_REQ
     DISCOVER_THREAD_REP

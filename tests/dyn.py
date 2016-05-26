@@ -38,17 +38,16 @@ class DistrSys:
         self.msub_sock.connect('epgm://{}:{}'.format(IP, PORT))
 
         # Message PUB socket
-        self.pub_sock = context.socket(zmq.PUB)
-        self.port = self.pub_sock.bind_to_random_port('tcp://*')
+        self.req_sock = context.socket(zmq.REQ)
 
         # Message SUB socket
-        self.sub_sock = context.socket(zmq.SUB)
-        self.sub_sock.setsockopt_string(zmq.SUBSCRIBE, self.runtime_id)
+        self.rep_sock = context.socket(zmq.ROUTER)
+        self.port = self.rep_sock.bind_to_random_port('tcp://*')
 
         # Setup polling mechanism
         self.poller = zmq.Poller()
         self.poller.register(self.msub_sock, zmq.POLLIN)
-        self.poller.register(self.sub_sock, zmq.POLLIN)
+        self.poller.register(self.rep_sock, zmq.POLLIN)
         #########################################
 
         # Add myself to runtimes
@@ -68,7 +67,7 @@ class DistrSys:
 
         while True:
             try:
-                packet = self.recv_packet([
+                data = self.recv_packet([
                     PacketType.DISCOVER_REQ,
                     PacketType.DISCOVER_REP,
                     PacketType.SHUTDOWN_REQ,
@@ -79,8 +78,7 @@ class DistrSys:
                 print('Request shutdown..')
 
                 if len(self.runtimes) == 1:
-                    # I am the only one
-                    break
+                    break # I am the only one
 
                 print('Signaling other runtimes...')
                 # Broadcast SHUTDOWN_REQ packet
@@ -93,19 +91,26 @@ class DistrSys:
                 self.send_packet(pkt)
                 continue
 
-            if not packet:
+            if not data:
                 self.print_runtimes()
                 continue
 
-            print('Got new message!')
+            addr, packet = data
+            print('Got new message from {}'.format(
+                addr if addr else 'multicast'
+            ))
             print(packet)
+
+            if packet.type == PacketType.PRINT:
+                self.print_runtimes()
+                continue
+
             ip, port, runtime_id = packet['ip'], packet['port'], packet['runtime_id']
 
             # TODO: Split into functions
             if packet.type == PacketType.DISCOVER_REQ:
                 # Save runtime data & listen for later requests
                 self.runtimes.add( (ip, port, runtime_id) )
-                self.sub_sock.connect('tcp://{}:{}'.format(ip, port))
 
                 # Send runtime info
                 print('Sending runtime info @ {}:{}'.format(ip, port))
@@ -120,14 +125,9 @@ class DistrSys:
             elif packet.type == PacketType.DISCOVER_REP:
                 # Save runtime data & listen for this runtime requests
                 self.runtimes.add( (ip, port, packet['runtime_id']) )
-                self.sub_sock.connect('tcp://{}:{}'.format(ip, port))
-
                 print('Found company @ {}:{}'.format(ip, port))
 
             elif packet.type == PacketType.SHUTDOWN_REQ:
-                # Ignore later requests for this runtime
-                self.sub_sock.disconnect('tcp://{}:{}'.format(ip, port))
-
                 # Remove runtime entry
                 entry = (ip, port, runtime_id)
                 if entry not in self.runtimes:
@@ -137,16 +137,17 @@ class DistrSys:
                     continue
 
                 self.runtimes.remove(entry)
-                print('Lost company @ {}:{}'.format(ip, port))
 
                 # Send SHUTDOWN_ACK
+                print('Sending SHUTDOWN_ACK @ {}:{}'.format(ip, port))
                 pkt = make_packet(
                     PacketType.SHUTDOWN_ACK,
                     ip=self.ip,
                     port=self.port,
                     runtime_id=self.runtime_id
                 )
-                self.send_packet(pkt, runtime_id=runtime_id)
+                self.send_packet(pkt, addr=(ip, port))
+                print('Lost company @ {}:{}'.format(ip, port))
 
             elif packet.type == PacketType.SHUTDOWN_ACK:
                 entry = (ip, port, runtime_id)
@@ -158,18 +159,20 @@ class DistrSys:
 
                 self.runtimes.remove(entry)
 
+                # Send ACK to sender
+                print('Sending ACK @ {}:{}'.format(ip, port))
+                self.send_ack_reply(addr)
+
+                # Check if all runtimes have answered
                 if len(self.runtimes) <= 1:
                     print('Signaled all other runtimes!')
                     break
 
-            elif packet.type == PacketType.PRINT:
-                self.print_runtimes()
-
         # Closes all sockets
         self.mpub_sock.close()
         self.msub_sock.close()
-        self.pub_sock.close()
-        self.sub_sock.close()
+        self.req_sock.close()
+        self.rep_sock.close()
         self.context.term()
 
     def shutdown(self):
@@ -181,17 +184,46 @@ class DistrSys:
             print('[{}]: {}:{} - {}'.format(i, *rt))
         print('=========================')
 
-    def send_packet(self, packet, runtime_id=None):
-        if runtime_id: # PUB socket shall be used
-            self.pub_sock.send_multipart([
-                runtime_id.encode('utf8'),
-                packet.to_bytes()
-            ])
+    def send_packet(self, packet, addr=None):
+        if addr: # REQ socket shall be used
+            ip, port = addr
+            addr = 'tcp://{}:{}'.format(ip, port)
+            self.req_sock.connect(addr)
+            self.req_sock.send(packet.to_bytes())
+
+            # Await for ACK
+            print('SEND WAITING FOR ACK/WAIT')
+            pkt = self.req_sock.recv()
+            pkt = Packet.from_bytes(pkt)
+            print(pkt)
+
+            # Check reply packet
+            if pkt.type == PacketType.WAIT:
+                # TODO: add to send queue again
+                # TODO: maybe sleep a tiny time
+                pass
+
+            self.req_sock.disconnect(addr)
+
         else: # Multicast PUB shall be used
             self.mpub_sock.send_pyobj(packet)
             self.send_packets.add(packet)
 
+    def send_ack_reply(self, addr):
+        """ Reply to sender (@ addr) with ACK """
+        ack_pkt = make_packet(PacketType.ACK)
+        print(ack_pkt)
+        print(addr)
+        self.rep_sock.send_multipart([
+            addr,
+            b'',
+            ack_pkt.to_bytes()
+        ])
+
     def recv_packet(self, packet_types, timeout=None):
+        """ Return (addr, packet) where addr is the address of the sender (zmq)
+            and packet is the recv Packet instance
+        """
         if not isinstance(packet_types, list):
             packet_types = [ packet_types ]
 
@@ -209,11 +241,14 @@ class DistrSys:
                 return None
 
             for sock in avail_socks:
-                if sock == self.msub_sock:
-                    packet = sock.recv_pyobj()
-                else:
-                    _, packet = sock.recv_multipart()
+
+                if sock is self.rep_sock: # ROUTER socket
+                    addr, _, packet = sock.recv_multipart()
                     packet = Packet.from_bytes(packet)
+                elif sock is self.msub_sock: # SUB socket
+                    addr, packet = None, sock.recv_pyobj()
+
+                #print(addr, packet)
 
                 # Check if packet is one of the previously sent
                 if packet in self.send_packets:
@@ -222,9 +257,9 @@ class DistrSys:
 
                 # Check if we got the packet we want
                 if packet.type in packet_types:
-                    return packet
+                    return (addr, packet)
 
-                self.packet_storage[packet.type].append(packet)
+                self.packet_storage[packet.type].append( (addr, packet) )
 
 def fast_hash(buff, length=8):
     try:
