@@ -108,7 +108,7 @@ class Packet():
         return not self.__eq__(other)
 
     def __hash__(self):
-        return self.to_bytes().__hash__()
+        return self.type
 
     def __len__(self):
         return len(self.payload) + len(self.header)
