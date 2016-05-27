@@ -3,6 +3,12 @@ from enum import IntEnum, unique
 
 @unique
 class PacketType(IntEnum):
+    """ All packets contain these keys by default:
+        -- ip:          IP address of the sender
+        -- port:        Port number that the sender is listening
+        -- runtime_id:  Unique id of the runtime
+    """
+
     UNINIT = 0b00000000
 
     DISCOVER_REQ = 0b00000010
@@ -11,18 +17,20 @@ class PacketType(IntEnum):
     SHUTDOWN_REQ = 0b00000100
     SHUTDOWN_ACK = 0b00000101
 
+    THREAD_MESSAGE =     0b00001000 # thread_id, status
+    RUNTIME_STATUS_REQ = 0b00011001 # thread_id, status
+    RUNTIME_PRINT_REQ  = 0b00011010 # thread_id, msg
+
     PRINT = 0b10000000
 
     ACK = 0b11111111
-    WAIT = 0b11111110
-    
+    RETRY = 0b11111110
+
     """
     DISCOVER_THREAD_REQ
     DISCOVER_THREAD_REP
 
     THREAD_MIGRATION_REQ
-
-    THREAD_MESSAGE_SEND
     """
 
     def reply_type(self):
