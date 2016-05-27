@@ -5,6 +5,7 @@ import time
 from datetime import datetime
 
 from ...logger import get_logger
+from .communication import EchoCommunication
 from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import get_thread_uid, fast_hash
@@ -134,27 +135,8 @@ class Runtime(object):
             list = self.get_next_round()
 
     def shutdown(self):
-        return
+        self._comms.shutdown()
 
-class EchoCommunication(object):
-    def __init__(self):
-        self._messages = {}
-
-    def recv(self, who):
-        queue = self._messages.setdefault(who, list())
-
-        try:
-            return queue.pop()
-        except IndexError:
-            return None
-
-    def snd(self, to, what):
-        queue = self._messages.setdefault(to, list())
-        queue.insert(0, what)
-
-    def can_recv(self, who):
-        queue = self._messages.setdefault(who, list())
-        return len(queue) > 0
 
 class ThreadContext(object):
     """ This class represents a thread context.
