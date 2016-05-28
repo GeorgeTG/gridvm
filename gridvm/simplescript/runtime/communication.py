@@ -6,7 +6,7 @@ from gridvm.network.protocol.packet import Packet
 from gridvm.network.protocol.packet import make_packet
 
 class EchoCommunication:
-    def __init__(self):
+    def __init__(self, *args, **kwargs):
         self._messages = {}
 
     def recv(self, who):
@@ -24,6 +24,10 @@ class EchoCommunication:
     def can_recv(self, who):
         queue = self._messages.setdefault(who, list())
         return len(queue) > 0
+
+
+    def shutdown(self):
+        pass
 
 class NetworkCommunication:
     def __init__(self, net_interface):

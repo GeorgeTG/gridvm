@@ -196,7 +196,7 @@ class SimpleScriptInterpreter(object):
             # re-insert address in stack
             self._stack.append(who)
 
-            self.waiting_from = who
+            self.waiting_from = (self.program_id, who)
             raise BlockedOperation
         self._stack.append(msg)
 

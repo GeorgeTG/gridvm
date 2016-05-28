@@ -1,14 +1,22 @@
 import pickle
 import lzma
 import time
+import itertools
 
 from datetime import datetime
 
 from gridvm.logger import get_logger
-from .communication import NetworkCommunication
+from .communication import NetworkCommunication, EchoCommunication
 from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import fast_hash
+
+
+def chain(*iterables):
+    # chain('ABC', 'DEF') --> A B C D E F
+    for it in iterables:
+        for element in it:
+            yield element
 
 class Runtime(object):
     def __init__(self, interface, bind_addres=None, mcast_address=None):
@@ -17,9 +25,10 @@ class Runtime(object):
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
         self.threads = dict()
-#        self.threads_by_program = dict()
+#        self.programs = dict()
+#        self.blocked_programs = dict()
 
-        self._comms = NetworkCommunication(interface)
+        self._comms = EchoCommunication(interface)
 
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
@@ -31,7 +40,7 @@ class Runtime(object):
         for thread_info in program_thread_info:
             self.logger.debug('Creating thread [{}]:{}...'.format(
                 thread_info.program_id,
-                thread_info.id
+                thread_info.thread_id
             ))
             self.create_thread(thread_info)
 
@@ -46,18 +55,15 @@ class Runtime(object):
                 program_id = thread_info.program_id,
                 thread_id = thread_info.thread_id,
                 code = code,
-                comms = self._comms)
+                communication = self._comms)
 
         # initiallise the interpreter with argv
         interpreter.start(thread_info.args)
 
-        # create a ThreadContext
-        context = ThreadContext(thread_info.program_id, thread_info.id, interpreter)
+        thread_list = self.threads.setdefault(interpreter.program_id, list())
+        thread_list.append(interpreter)
 
-        thread_uid = get_thread_uid(thread_info.program_id, thread_info.id)
-        self.threads[thread_uid] = context
-
-    def pack_thread(self, thread_uid):
+    def pack_thread(self, program_id, thread_id):
         """ Pack a thread with it's state and code, into a transferable blob"""
         inter = self.thread[thread_uid]
         return ThreadPackage.from_inter(inter).pack()
@@ -79,34 +85,37 @@ class Runtime(object):
 
         self.threads[thread_uid] = interpreter
 
+
     def get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
         #FIXME: this is less bad :)
 
         run_list = [ ]
         while not run_list:
+#            for inter in itertools.chain(*self.threads.values()):
+#                print(inter.program_id, inter.thread_id, inter.status.name)
             # Keep track of threads status
             total_blocked = 0
             total_sleeping = 0
             total_finished = 0
 
-            for thread_uid, inter in self.threads.items():
+            for inter in itertools.chain(*self.threads.values()):
                 status = inter.status
 
                 if status == InterpreterStatus.RUNNING:
-                    run_list.append(context)
+                    run_list.append(inter)
 
                 elif (status == InterpreterStatus.SLEEPING and
                         time.time() >= inter.wake_up_at):
                     # wake this one up
                     inter.status = InterpreterStatus.RUNNING
-                    run_list.append(context)
+                    run_list.append(inter)
 
                 elif (status == InterpreterStatus.BLOCKED and
                         self._comms.can_recv(inter.waiting_from)):
                     # can unblock
                     inter.status = InterpreterStatus.RUNNING
-                    run_list.append(context)
+                    run_list.append(inter)
 
                 elif status == InterpreterStatus.BLOCKED:
                     total_blocked += 1
@@ -117,12 +126,13 @@ class Runtime(object):
                 elif status == InterpreterStatus.FINISHED:
                     total_finished += 1
 
-            if total_blocked == len(self.threads) - total_finished:
+            total_threads = sum( (len(values) for values in self.threads.values()))
+            if total_blocked == total_threads - total_finished:
                 self.logger.error("DEADLOCK! ABORTING!")
                 self.shutdown()
                 break
 
-            if total_sleeping == len(self.threads) - total_finished:
+            if total_sleeping == total_threads - total_finished:
                 self.logger.debug("All threads are sleeping...")
                 time.sleep(0.1)
 
@@ -138,9 +148,13 @@ class Runtime(object):
                     inter.exec_next()
                 except Exception as ex:
                     self.logger.error('Thread {} of program {} failed!'.format(
-                        context.thread_id,
-                        context.program_id))
+                        inter.thread_id,
+                        inter.program_id))
                     self.logger.error(str(ex))
+
+                    # thread failed
+                    self.on_thread_fail(inter)
+                    break
 
                     self.shutdown()
 
@@ -148,6 +162,9 @@ class Runtime(object):
 
     def shutdown(self):
         self._comms.shutdown()
+
+    def on_thread_fail(self, failed_inter):
+        del self.threads[failed_inter.program_id]
 
 
 class ThreadPackage(object):

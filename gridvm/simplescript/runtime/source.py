@@ -70,9 +70,9 @@ def load_source(filename, dump_to_objet_file=True):
 MT_TAG = "#SIMPLESCRIPT_MULTITHREADED"
 T_TAG = "#THREAD"
 class ThreadInfo(object):
-    def __init__(self, program_id, id, source_file, args):
+    def __init__(self, program_id, thread_id, source_file, args):
         self.source_file = source_file
-        self.id = id
+        self.thread_id = thread_id
         self.program_id = program_id
         self.args = args
 
