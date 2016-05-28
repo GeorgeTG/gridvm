@@ -64,7 +64,10 @@ class SimpleScriptInterpreter(object):
                 self._prn,
                 self._ret,
                 self._nop
-                ]
+        ]
+
+        # Set thread location to local runtime
+        self._comms.update_thread_location( (program_id, thread_id), runtime_id )
 
     @property
     def status(self):
@@ -191,7 +194,7 @@ class SimpleScriptInterpreter(object):
 
     def _rcv(self, arg=None):
         who = self._stack.pop()
-        msg = self._comms.recv( (self.program_id, who) )
+        msg = self._comms.receive_message( (self.program_id, who) )
         if msg == None:
             # re-insert address in stack
             self._stack.append(who)
@@ -203,7 +206,7 @@ class SimpleScriptInterpreter(object):
     def _snd(self, arg=None):
         send_what = self._stack.pop()
         send_to = self._stack.pop()
-        self._comms.snd( (self.program_id, send_to) , send_what)
+        self._comms.send_message( (self.program_id, send_to) , send_what)
 
     def _slp(self, arg):
         self.wake_up_at = time.time() + self._stack.pop()
