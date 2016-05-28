@@ -1,7 +1,6 @@
 import pickle
 import lzma
 import time
-import itertools
 
 from datetime import datetime
 
@@ -10,13 +9,7 @@ from .communication import NetworkCommunication, EchoCommunication
 from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import fast_hash
-
-
-def chain(*iterables):
-    # chain('ABC', 'DEF') --> A B C D E F
-    for it in iterables:
-        for element in it:
-            yield element
+from .scheduler import RuntimeScheduler
 
 class Runtime(object):
     def __init__(self, interface, bind_addres=None, mcast_address=None):
@@ -24,11 +17,8 @@ class Runtime(object):
         self.id = fast_hash( datetime.now().isoformat(), length=4)
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
-        self.threads = dict()
-#        self.programs = dict()
-#        self.blocked_programs = dict()
-
         self._comms = EchoCommunication(interface)
+        self._scheduler = RuntimeScheduler(self._comms)
 
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
@@ -57,18 +47,19 @@ class Runtime(object):
                 code = code,
                 communication = self._comms)
 
-        # initiallise the interpreter with argv
+
+        # initialise the interpreter with argv
         interpreter.start(thread_info.args)
 
-        thread_list = self.threads.setdefault(interpreter.program_id, list())
-        thread_list.append(interpreter)
+        self._scheduler.add_thread(interpreter)
 
     def pack_thread(self, program_id, thread_id):
         """ Pack a thread with it's state and code, into a transferable blob"""
-        inter = self.thread[thread_uid]
+        inter = self._scheduler.pop_thread(program_id, thread_id)
         return ThreadPackage.from_inter(inter).pack()
 
     def unpack_thread(self, blob):
+        self.total_threads += 1
         """ Create a thread from a package """
         package = ThreadPackage.unpack(blob)
 
@@ -77,94 +68,33 @@ class Runtime(object):
                 program_id = package.program_id,
                 runtime_id = package.runtime_id,
                 code=package.code,
-                comms=self._comms)
+                communication=self._comms)
 
+        # load stack, memory etc
+        interpreter.load_state(package.state)
 
-        # generate a unique id and store thread
-        thread_uid = (package.program_id, package.thread_id)
-
-        self.threads[thread_uid] = interpreter
-
-
-    def get_next_round(self):
-        """ Generate a run list and yield threads in a round-robin fashion """
-        #FIXME: this is less bad :)
-
-        run_list = [ ]
-        while not run_list:
-#            for inter in itertools.chain(*self.threads.values()):
-#                print(inter.program_id, inter.thread_id, inter.status.name)
-            # Keep track of threads status
-            total_blocked = 0
-            total_sleeping = 0
-            total_finished = 0
-
-            for inter in itertools.chain(*self.threads.values()):
-                status = inter.status
-
-                if status == InterpreterStatus.RUNNING:
-                    run_list.append(inter)
-
-                elif (status == InterpreterStatus.SLEEPING and
-                        time.time() >= inter.wake_up_at):
-                    # wake this one up
-                    inter.status = InterpreterStatus.RUNNING
-                    run_list.append(inter)
-
-                elif (status == InterpreterStatus.BLOCKED and
-                        self._comms.can_recv(inter.waiting_from)):
-                    # can unblock
-                    inter.status = InterpreterStatus.RUNNING
-                    run_list.append(inter)
-
-                elif status == InterpreterStatus.BLOCKED:
-                    total_blocked += 1
-
-                elif status == InterpreterStatus.SLEEPING:
-                    total_sleeping += 1
-
-                elif status == InterpreterStatus.FINISHED:
-                    total_finished += 1
-
-            total_threads = sum( (len(values) for values in self.threads.values()))
-            if total_blocked == total_threads - total_finished:
-                self.logger.error("DEADLOCK! ABORTING!")
-                self.shutdown()
-                break
-
-            if total_sleeping == total_threads - total_finished:
-                self.logger.debug("All threads are sleeping...")
-                time.sleep(0.1)
-
-        return run_list
-
-    def run(self):
-        # if we get an empty list, either everyone is blocked, or they are all finished
-        list = self.get_next_round()
-        while list:
-            for inter in list:
-                inter = list.pop()
-                try:
-                    inter.exec_next()
-                except Exception as ex:
-                    self.logger.error('Thread {} of program {} failed!'.format(
-                        inter.thread_id,
-                        inter.program_id))
-                    self.logger.error(str(ex))
-
-                    # thread failed
-                    self.on_thread_fail(inter)
-                    break
-
-                    self.shutdown()
-
-            list = self.get_next_round()
+        self._scheduler.add_thread(interpreter)
 
     def shutdown(self):
         self._comms.shutdown()
 
     def on_thread_fail(self, failed_inter):
-        del self.threads[failed_inter.program_id]
+        del self._scheduler[failed_inter.program_id]
+
+    def run(self):
+        for instruction in self._scheduler.get_next():
+            try:
+                instruction()
+            except Exception as ex:
+                self.logger.error('Thread {} of program {} failed!'.format(
+                    inter.thread_id,
+                    inter.program_id))
+                self.logger.error(str(ex))
+
+                # thread failed
+                self.on_thread_fail(inter)
+
+                self.shutdown()
 
 
 class ThreadPackage(object):
@@ -174,7 +104,7 @@ class ThreadPackage(object):
     def __init__(self, runtime_id, program_id, thread_id, code, state):
         self.program_id = program_id
         self.thread_id = thread_id
-        self.runtime_id
+        self.runtime_id = runtime_id
         self.code = code
         self.state = state
 
@@ -185,8 +115,8 @@ class ThreadPackage(object):
                 inter.runtime_id,
                 inter.program_id,
                 inter.thread_id,
-                self.interpreter.code,
-                self.interpreter.save_state()
+                inter.code,
+                inter.save_state()
                 )
 
     def pack(self):

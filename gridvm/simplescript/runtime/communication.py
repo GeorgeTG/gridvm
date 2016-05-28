@@ -22,6 +22,9 @@ class EchoCommunication:
         queue = self._messages.setdefault(to, list())
         queue.insert(0, what)
 
+    def update_thread_location(*args, **kwargs):
+        pass
+
     def can_receive_message(self, who):
         queue = self._messages.setdefault(who, list())
         return len(queue) > 0
