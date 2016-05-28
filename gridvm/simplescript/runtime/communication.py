@@ -1,9 +1,9 @@
 from queue import Queue, Empty
 
 from gridvm.network.nethandler import NetHandler
-from gridvm.network.protocol.packet.ptype import PacketType
-from gridvm.network.protocol.packet.packet import Packet
-from gridvm.network.protocol.packet.factory import make_packet
+from gridvm.network.protocol.packet import PacketType
+from gridvm.network.protocol.packet import Packet
+from gridvm.network.protocol.packet import make_packet
 
 class EchoCommunication:
     def __init__(self):

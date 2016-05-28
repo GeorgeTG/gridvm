@@ -4,14 +4,14 @@ import time
 
 from datetime import datetime
 
-from ...logger import get_logger
-from .communication import EchoCommunication
+from gridvm.logger import get_logger
+from .communication import NetworkCommunication
 from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
-from .utils import get_thread_uid, fast_hash
+from .utils import fast_hash
 
 class Runtime(object):
-    def __init__(self):
+    def __init__(self, interface, bind_addres=None, mcast_address=None):
         # Generate unique id for each runtime (even in same pc)
         self.id = fast_hash( datetime.now().isoformat(), length=4)
         self.logger = get_logger('{}:Runtime'.format(self.id))
@@ -19,7 +19,7 @@ class Runtime(object):
         self.threads = dict()
 #        self.threads_by_program = dict()
 
-        self._comms = EchoCommunication()
+        self._comms = NetworkCommunication(interface)
 
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
@@ -41,7 +41,14 @@ class Runtime(object):
         """ Create a thread from ThreadInfo"""
         code = generic_load(thread_info.source_file)
 
-        interpreter = SimpleScriptInterpreter(code, self._comms)
+        interpreter = SimpleScriptInterpreter(
+                runtime_id = self.id,
+                program_id = thread_info.program_id,
+                thread_id = thread_info.thread_id,
+                code = code,
+                comms = self._comms)
+
+        # initiallise the interpreter with argv
         interpreter.start(thread_info.args)
 
         # create a ThreadContext
@@ -52,20 +59,25 @@ class Runtime(object):
 
     def pack_thread(self, thread_uid):
         """ Pack a thread with it's state and code, into a transferable blob"""
-        context = self.thread[thread_uid]
-        return ThreadPackage.from_context(context).pack()
+        inter = self.thread[thread_uid]
+        return ThreadPackage.from_inter(inter).pack()
 
     def unpack_thread(self, blob):
         """ Create a thread from a package """
         package = ThreadPackage.unpack(blob)
-        interpreter = SimpleScriptInterpreter(code=package.code, comms=self._comms)
 
-        # create a context for this thread
-        context = ThreadContext(package.program_id, package.thread_id, interpreter)
+        interpreter = SimpleScriptInterpreter(
+                thread_id = package.thread_id,
+                program_id = package.program_id,
+                runtime_id = package.runtime_id,
+                code=package.code,
+                comms=self._comms)
+
 
         # generate a unique id and store thread
-        thread_uid = get_thread_uid(package.program_id, package.thread_id)
-        self.threads[thread_uid] = context
+        thread_uid = (package.program_id, package.thread_id)
+
+        self.threads[thread_uid] = interpreter
 
     def get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
@@ -78,22 +90,22 @@ class Runtime(object):
             total_sleeping = 0
             total_finished = 0
 
-            for thread_id, context in self.threads.items():
-                status = context.interpreter.status
+            for thread_uid, inter in self.threads.items():
+                status = inter.status
 
                 if status == InterpreterStatus.RUNNING:
                     run_list.append(context)
 
                 elif (status == InterpreterStatus.SLEEPING and
-                        time.time() >= context.interpreter.wake_up_at):
+                        time.time() >= inter.wake_up_at):
                     # wake this one up
-                    context.interpreter.status = InterpreterStatus.RUNNING
+                    inter.status = InterpreterStatus.RUNNING
                     run_list.append(context)
 
                 elif (status == InterpreterStatus.BLOCKED and
-                        self._comms.can_recv(context.interpreter.waiting_from)):
+                        self._comms.can_recv(inter.waiting_from)):
                     # can unblock
-                    context.interpreter.status = InterpreterStatus.RUNNING
+                    inter.status = InterpreterStatus.RUNNING
                     run_list.append(context)
 
                 elif status == InterpreterStatus.BLOCKED:
@@ -120,10 +132,10 @@ class Runtime(object):
         # if we get an empty list, either everyone is blocked, or they are all finished
         list = self.get_next_round()
         while list:
-            for context in list:
-                context = list.pop()
+            for inter in list:
+                inter = list.pop()
                 try:
-                    context.interpreter.exec_next()
+                    inter.exec_next()
                 except Exception as ex:
                     self.logger.error('Thread {} of program {} failed!'.format(
                         context.thread_id,
@@ -138,40 +150,31 @@ class Runtime(object):
         self._comms.shutdown()
 
 
-class ThreadContext(object):
-    """ This class represents a thread context.
-    Thread contexts are the containers a runtime uses to store
-    everything a thread required to run.
-    A ThreadContext can be packed into a portable ThreadPackage
-    """
-    def __init__(self, program_id, thread_id, interpreter):
-        self.program_id = program_id
-        self.thread_id = thread_id
-        self.interpreter  = interpreter
-
 class ThreadPackage(object):
     """ This class represents a thead package.
     Thread packages are used as containers to transfer thread state
     and code to another runtime """
-    def __init__(self, program_id, thread_id, code, state):
+    def __init__(self, runtime_id, program_id, thread_id, code, state):
         self.program_id = program_id
         self.thread_id = thread_id
+        self.runtime_id
         self.code = code
         self.state = state
 
     @classmethod
-    def from_context(cls, context):
+    def from_inter(cls, inter):
         """ Create a ThreadPackage from a ThreadContex """
         return cls(
-                context.program_id,
-                context.thread_id,
+                inter.runtime_id,
+                inter.program_id,
+                inter.thread_id,
                 self.interpreter.code,
                 self.interpreter.save_state()
                 )
 
     def pack(self):
-        """ Pack into transfer-friendly binary blob """
-        package = (self.program_id, self.thread_id, self.code, self.state)
+        """ Pack into network-friendly transferable binary blob """
+        package = (self.runtime_id, self.program_id, self.thread_id, self.code, self.state)
         dump = pickle.dumps(package, pickle.HIGHEST_PROTOCOL)
         return lzma.compress(dump)
 
@@ -184,7 +187,7 @@ class ThreadPackage(object):
 
 if __name__ == '__main__':
     import sys
-    runtime = Runtime()
+    runtime = Runtime('eno1')
 
     if len(sys.argv) == 1:
         print('No program has been given..')

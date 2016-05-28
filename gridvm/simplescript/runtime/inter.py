@@ -33,14 +33,17 @@ COMP_OP_TABLE = [
         ]
 
 class SimpleScriptInterpreter(object):
-    def __init__(self, code, communication):
+    def __init__(self, runtime_id, program_id, thread_id, code, communication):
         self._pc = 0
-        self._code = code
+        self.code = code
         self._vars = dict()
         self._arrays = dict()
         self._stack = collections.deque()
         self._comms = communication
         self._status = InterpreterStatus.STOPPED
+        self.program_id = program_id
+        self.thread_id = thread_id
+        self.runtime_id = runtime_id
 
         self.__map = [
                 self._load_const,
@@ -62,10 +65,6 @@ class SimpleScriptInterpreter(object):
                 self._ret,
                 self._nop
                 ]
-
-    @property
-    def code(self):
-        return self._code
 
     @property
     def status(self):
@@ -90,16 +89,16 @@ class SimpleScriptInterpreter(object):
         print('stack:')
         print(self._stack)
         print('consts:')
-        for i, var in enumerate(self._code.co_consts):
+        for i, var in enumerate(self.code.co_consts):
             print(i, var)
         print('vars memory dump: ')
         for index, value in self._vars.items():
             # print var_name, value
-            print(self._code.co_vars[index], value)
+            print(self.code.co_vars[index], value)
         print('arrays memory dump: ')
         for index, value in self._arrays.items():
             # print var_name, value
-            print(self._code.co_arrays[index], value)
+            print(self.code.co_arrays[index], value)
 
     def start(self, argv):
         self._arrays[0] = argv
@@ -108,7 +107,7 @@ class SimpleScriptInterpreter(object):
 
     def exec_next(self):
             try:
-                instruction = self._code.instructions[self._pc]
+                instruction = self.code.instructions[self._pc]
                 #print(instruction)
             except IndexError:
                 raise RuntimeError("Program finished without calling RET!")
@@ -120,7 +119,7 @@ class SimpleScriptInterpreter(object):
                 return # don't increment PC
             except Exception as ex:
                 error_msg =  'Execution failed!\n'
-                error_msg += 'Instruction: {}\n'.format(str(self._code.instructions[self._pc]))
+                error_msg += 'Instruction: {}\n'.format(str(self.code.instructions[self._pc]))
                 error_msg += 'Reason: {} - {}\n'.format(ex.__class__.__name__, str(ex))
 
                 print('State dump: ')
@@ -137,7 +136,7 @@ class SimpleScriptInterpreter(object):
 
     ##### INSTRUCTIONS #####
     def _load_const(self, arg):
-        self._stack.append(self._code.co_consts[arg])
+        self._stack.append(self.code.co_consts[arg])
 
     def _load_var(self, arg):
         self._stack.append(self._vars[arg])
@@ -152,7 +151,7 @@ class SimpleScriptInterpreter(object):
         self._arrays[arg] = {}
         # build only once
         # replace instruction with nop
-        self._code.instructions[self._pc] = Operation(OpCode.NOP.value)
+        self.code.instructions[self._pc] = Operation(OpCode.NOP.value)
 
     def _store_array(self, arg):
         index = self._stack.pop()
@@ -168,7 +167,7 @@ class SimpleScriptInterpreter(object):
         for i in range(arg):
             vect.append(self._stack.pop())
 
-        format = self._code.co_consts[self._stack.pop()]
+        format = self.code.co_consts[self._stack.pop()]
         print(format, ', '.join(str(arg) for arg in reversed(vect)))
 
     def _arithm(self, arg):
@@ -182,17 +181,17 @@ class SimpleScriptInterpreter(object):
         self._stack.append(COMP_OP_TABLE[arg](var1, var2))
 
     def _jmp(self, arg):
-        new_index = self._code.co_labels[arg]
+        new_index = self.code.co_labels[arg]
         self._pc = new_index - 1 # we want the next instruction to be new index
 
     def _jmp_if_true(self, arg):
         if self._stack.pop():
             # we want the next instruction to be new index
-            self._pc = self._code.co_labels[arg] -1
+            self._pc = self.code.co_labels[arg] -1
 
     def _rcv(self, arg=None):
         who = self._stack.pop()
-        msg = self._comms.recv(who)
+        msg = self._comms.recv( (self.program_id, who) )
         if msg == None:
             # re-insert address in stack
             self._stack.append(who)
@@ -204,7 +203,7 @@ class SimpleScriptInterpreter(object):
     def _snd(self, arg=None):
         send_what = self._stack.pop()
         send_to = self._stack.pop()
-        self._comms.snd(send_to, send_what)
+        self._comms.snd( (self.program_id, send_to) , send_what)
 
     def _slp(self, arg):
         self.wake_up_at = time.time() + self._stack.pop()

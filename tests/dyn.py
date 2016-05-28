@@ -11,8 +11,8 @@ from gridvm.network.protocol.packet.packet import Packet
 from gridvm.network.protocol.packet.factory import make_packet, make_packet
 from gridvm.network.protocol.packet.ptype  import PacketType
 
-IP = '224.0.0.1'
-PORT = 19999
+IP = '239.192.1.1'
+PORT = 39999
 
 class DistrSys:
     def __init__(self, net_interface):
@@ -24,21 +24,19 @@ class DistrSys:
         self.runtimes = set()
 
         # hack to find own local IP
-        f = os.popen('ifconfig {} | grep "inet\ addr" | cut -d: -f2 | cut -d" " -f1'
-                        .format(net_interface))
-        self.ip = f.read().strip()
+        self.ip = '192.168.1.2'
 
         ################ SOCKETS #################
         context = self.context = zmq.Context()
 
         # Multicast PUB socket
         self.mpub_sock = context.socket(zmq.PUB)
-        self.mpub_sock.bind('epgm://{}:{}'.format(IP, PORT))
+        self.mpub_sock.bind('epgm://{};{}:{}'.format(net_interface, IP, PORT))
 
         # Multicast SUB socket
         self.msub_sock = context.socket(zmq.SUB)
-        self.msub_sock.setsockopt_string(zmq.SUBSCRIBE, '')
-        self.msub_sock.connect('epgm://{}:{}'.format(IP, PORT))
+#        self.msub_sock.setsockopt_string(zmq.SUBSCRIBE, '')
+        self.msub_sock.connect('epgm://{};{}:{}'.format(net_interface, IP, PORT))
 
         # Message PUB socket
         self.req_sock = context.socket(zmq.REQ)
@@ -112,6 +110,7 @@ class DistrSys:
             ip, port, runtime_id = packet['ip'], packet['port'], packet['runtime_id']
 
             if packet.type == PacketType.DISCOVER_REQ:
+                print("mono sweg")
                 # Save runtime data & listen for later requests
                 self.runtimes.add( (ip, port, runtime_id) )
 
@@ -252,7 +251,7 @@ class DistrSys:
                 elif sock is self.msub_sock: # SUB socket
                     addr, packet = None, sock.recv_pyobj()
 
-                #print(addr, packet)
+                print(addr, packet)
 
                 # Check if packet is one of the previously sent
                 if packet in self.send_packets:
@@ -280,7 +279,7 @@ if __name__ == '__main__':
 
     #_, interface, local_ip = sys.argv
 
-    ds = DistrSys('wlan0')
+    ds = DistrSys('eno1')
     ds.start()
 
     """

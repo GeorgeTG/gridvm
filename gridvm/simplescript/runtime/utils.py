@@ -12,5 +12,4 @@ def fast_hash(buff, length=8):
     return str(base64.urlsafe_b64encode(h), 'ascii')[:length]
 
 
-def get_thread_uid(program_id, thread_id):
-    return fast_hash(str(program_id) + str(thread_id))
+
