@@ -18,6 +18,7 @@ class Runtime(object):
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
         self._comms = EchoCommunication(interface)
+        #self._comms = NetworkCommunication(self.id, interface)
         self._scheduler = RuntimeScheduler(self._comms)
 
     def load_program(self, filename):
@@ -72,7 +73,6 @@ class Runtime(object):
 
         # load stack, memory etc
         interpreter.load_state(package.state)
-
         self._scheduler.add_thread(interpreter)
 
     def shutdown(self):

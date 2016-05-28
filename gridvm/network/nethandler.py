@@ -13,8 +13,8 @@ MULTICAST_IP = '224.0.0.1'
 MULTICAST_PORT = 19999
 
 class NetHandler:
-    def __init__(self, comms, net_interface):
-        self.runtime_id = fast_hash(str(time.time()))
+    def __init__(self, comms, runtime_id, net_interface):
+        self.runtime_id = runtime_id
         self.logger = get_logger('{}:NetHandler'.format(self.runtime_id))
 
         self.comms = comms # Communcation class between network & runtime
@@ -81,8 +81,15 @@ class NetHandler:
 
                 # Send packet over network
                 if runtime_id:
-                    self.send_packet(packet, addr=self.runtimes[runtime_id])
+                    addr = self.runtimes[runtime_id]
+                    self.logger.debug('Sending packet "{}" to {}:{}'.format(
+                        PacketType(packet.type).name, *addr
+                    ))
+                    self.send_packet(packet, addr=addr)
                 else:
+                    self.logger.debug('Sending packet "{}" over multicast'.format(
+                        PacketType(packet.type).name
+                    ))
                     self.send_packet(packet)
 
             try:
@@ -324,13 +331,17 @@ class NetHandler:
 if __name__ == '__main__':
     #assert(len(sys.argv) == 3)
     #_, interface, local_ip = sys.argv
-    from threading import Thread
+    from time import sleep
     from gridvm.simplescript.runtime.communication import NetworkCommunication
 
-    comm = NetworkCommunication('wlan0')
+    runtime_id = fast_hash(str(time.time()))
 
-    thread = Thread(target=comm.nethandler.start)
-    thread.start()
+    comm = NetworkCommunication(runtime_id, 'wlan0')
+
+    try:
+        sleep(10000)
+    except KeyboardInterrupt:
+        comm.nethandler.shutdown()
 
     """
     while True:
