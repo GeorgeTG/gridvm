@@ -68,6 +68,7 @@ class NetHandler:
         self.send_packet(pkt)
 
         self._terminate = False
+        self._shutdown_req = False
         while not self._terminate:
 
             # FIXME: Bad way - use select instead, for both socket and queue
@@ -102,6 +103,7 @@ class NetHandler:
                     PacketType.THREAD_MESSAGE,      # Local
                     PacketType.RUNTIME_STATUS_REQ,  # Local
                     PacketType.RUNTIME_PRINT_REQ,   # Local
+                    PacketType.MIGRATE_THREAD,
                     PacketType.MIGRATION_COMPLETED  # Multicast
                 ], timeout=2000)
             except KeyboardInterrupt:
@@ -177,7 +179,7 @@ class NetHandler:
                 del self.runtimes[runtime_id]
 
                 # Send ACK to sender
-                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
                 self.send_reply(addr, PacketType.ACK)
 
                 # Check if all runtimes have answered
@@ -187,11 +189,13 @@ class NetHandler:
                     break
 
             elif packet.type == PacketType.THREAD_MESSAGE:
+                # TODO: check if thread belongs to me and send RETRY
+
                 # Signal that a new thread message has arrived
                 self.comms.add_thread_message(packet)
 
                 # Send ACK to sender
-                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
                 self.send_reply(addr, PacketType.ACK)
 
             elif packet.type == PacketType.RUNTIME_STATUS_REQ:
@@ -199,7 +203,7 @@ class NetHandler:
                 self.comms.add_status_request(packet)
 
                 # Send ACK to sender
-                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
                 self.send_reply(addr, PacketType.ACK)
 
             elif packet.type == PacketType.RUNTIME_PRINT_REQ:
@@ -207,8 +211,29 @@ class NetHandler:
                 self.comms.add_print_request(packet)
 
                 # Send ACK to sender
-                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
                 self.send_reply(addr, PacketType.ACK)
+
+            elif packet.type == PacketType.MIGRATE_THREAD:
+                if self._shutdown_req: # Cannot accept more threads
+                    self.logger.debug('Replying NACK @ {}:{}'.format(ip, port))
+                    self.send_reply(addr, PacketType.NACK)
+                else:
+                    self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
+                    self.send_reply(addr, PacketType.ACK)
+
+                # Add new thread to runtime
+                self.comms.add_thread_migration(packet)
+
+                # Broadcast MIGRATION_COMPLETED packet
+                mpacket = make_packet(
+                    PacketType.MIGRATION_COMPLETED,
+                    thread_uid=packet['thread_uid'],
+                    ip=self.ip,
+                    port=self.port,
+                    runtime_id=self.runtime_id
+                )
+                self.send_packet(mpacket)
 
             elif packet.type == PacketType.MIGRATION_COMPLETED:
                 # Update thread location
@@ -219,6 +244,7 @@ class NetHandler:
 
     def shutdown(self):
         self.logger.info('Request shutdown...')
+        self._shutdown_req = True
         if len(self.runtimes) == 1:
             self._terminate = True # I am the only one
             return
@@ -266,17 +292,21 @@ class NetHandler:
             self.logger.debug('Got {}!'.format(PacketType(rep_packet.type).name))
             #print(pkt)
 
+            self.req_sock.disconnect(addr)
+
             # Check reply packet
             if rep_packet.type == PacketType.RETRY:
                 # TODO: add to send queue again
                 # TODO: maybe sleep a tiny time
                 pass
-
-            self.req_sock.disconnect(addr)
+            elif rep_packet.type == PacketType.NACK:
+                return False # Only used in MIGRATE_THREAD
 
         else: # Multicast PUB shall be used
             self.mpub_sock.send_pyobj(packet)
             self.msend_packets.add(packet)
+
+        return True
 
     def send_reply(self, addr, rep_type):
         """ Reply to sender (@ addr) with ACK """
