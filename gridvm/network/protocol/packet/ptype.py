@@ -17,20 +17,21 @@ class PacketType(IntEnum):
     SHUTDOWN_REQ = 0b00000100
     SHUTDOWN_ACK = 0b00000101
 
-    THREAD_MESSAGE =     0b00001000 # thread_id, status
-    RUNTIME_STATUS_REQ = 0b00011001 # thread_id, status
-    RUNTIME_PRINT_REQ  = 0b00011010 # thread_id, msg
+    THREAD_MESSAGE =     0b00001000 # thread_uid, status
+    RUNTIME_STATUS_REQ = 0b00011001 # thread_uid, status
+    RUNTIME_PRINT_REQ  = 0b00011010 # thread_uid, msg
 
-    PRINT = 0b10000000
+    MIGRATE_THREAD =      0b00100000 # thread_uid, thread
+    MIGRATION_COMPLETED = 0b00100001 # thread_uid
 
     ACK = 0b11111111
     RETRY = 0b11111110
 
+    PRINT = 0b10000000
+    
     """
     DISCOVER_THREAD_REQ
     DISCOVER_THREAD_REP
-
-    THREAD_MIGRATION_REQ
     """
 
     def reply_type(self):

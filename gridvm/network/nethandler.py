@@ -17,7 +17,7 @@ class NetHandler:
         self.runtime_id = fast_hash(str(time.time()))
         self.logger = get_logger('{}:NetHandler'.format(self.runtime_id))
 
-        self.comms = comms
+        self.comms = comms # Communcation class between network & runtime
 
         self.packet_storage = { type: [ ] for type in list(PacketType) }
         self.msend_packets = set()  # Self-sent packets to multicast
@@ -71,18 +71,31 @@ class NetHandler:
         while not self._terminate:
 
             # FIXME: Bad way - use select instead, for both socket and queue
+            #        or maybe switch queue to pipe
             to_send = self.comms.get_to_send_requests()
             for (runtime_id, packet) in to_send:
-                self.send_packet(packet, addr=self.runtimes[runtime_id])
+                # Add required fields to packet
+                packet['ip'] = self.ip
+                packet['port'] = self.port
+                packet['runtime_id'] = self.runtime_id
+
+                # Send packet over network
+                if runtime_id:
+                    self.send_packet(packet, addr=self.runtimes[runtime_id])
+                else:
+                    self.send_packet(packet)
 
             try:
                 self.logger.debug('Waiting for packets...')
                 data = self.recv_packet([
-                    PacketType.DISCOVER_REQ,
-                    PacketType.DISCOVER_REP,
-                    PacketType.SHUTDOWN_REQ,
-                    PacketType.SHUTDOWN_ACK,
-                    PacketType.PRINT
+                    PacketType.DISCOVER_REQ,        # Multicast
+                    PacketType.DISCOVER_REP,        # Multicast
+                    PacketType.SHUTDOWN_REQ,        # Multicast
+                    PacketType.SHUTDOWN_ACK,        # Local
+                    PacketType.THREAD_MESSAGE,      # Local
+                    PacketType.RUNTIME_STATUS_REQ,  # Local
+                    PacketType.RUNTIME_PRINT_REQ,   # Local
+                    PacketType.MIGRATION_COMPLETED  # Multicast
                 ], timeout=2000)
             except KeyboardInterrupt:
                 self.shutdown()
@@ -165,6 +178,35 @@ class NetHandler:
                     self.logger.info('Signaled all other runtimes!')
                     self._terminate = True
                     break
+
+            elif packet.type == PacketType.THREAD_MESSAGE:
+                # Signal that a new thread message has arrived
+                self.comms.add_thread_message(packet)
+
+                # Send ACK to sender
+                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.send_reply(addr, PacketType.ACK)
+
+            elif packet.type == PacketType.RUNTIME_STATUS_REQ:
+                # Signal that that the thread has changed state
+                self.comms.add_status_request(packet)
+
+                # Send ACK to sender
+                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.send_reply(addr, PacketType.ACK)
+
+            elif packet.type == PacketType.RUNTIME_PRINT_REQ:
+                # Signal that a new print request has arrived
+                self.comms.add_print_request(packet)
+
+                # Send ACK to sender
+                self.logger.debug('Sending ACK @ {}:{}'.format(ip, port))
+                self.send_reply(addr, PacketType.ACK)
+
+            elif packet.type == PacketType.MIGRATION_COMPLETED:
+                # Update thread location
+                self.comms.update_thread_location(packet)
+
 
         self.cleanup()
 
