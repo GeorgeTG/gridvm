@@ -156,7 +156,7 @@ class NetworkCommunication:
         """
 
         if orig_runtime_id == self.runtime_id:
-            self._status_req( (thread_uid, new_status) )
+            self._status_req.put( (thread_uid, new_status) )
         else:
             packet = make_packet(
                 PacketType.RUNTIME_STATUS_REQ,

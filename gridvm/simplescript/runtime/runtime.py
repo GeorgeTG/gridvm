@@ -1,6 +1,7 @@
 import pickle
 import lzma
 import time
+import itertools
 
 from datetime import datetime
 
@@ -9,7 +10,6 @@ from .communication import NetworkCommunication, EchoCommunication
 from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import fast_hash
-from .scheduler import RuntimeScheduler
 from ..ss_exception import StatusChange
 
 class Runtime(object):
@@ -18,9 +18,12 @@ class Runtime(object):
         self.id = fast_hash( datetime.now().isoformat(), length=4)
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
+        self._programs = dict()
+        self._remote_programs = dict()
+        self._own_programs = dict()
+
         #self._comms = EchoCommunication(interface)
         self._comms = NetworkCommunication(self.id, interface)
-        self._scheduler = RuntimeScheduler(self.id, self._comms)
 
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
@@ -53,7 +56,18 @@ class Runtime(object):
         # initialise the interpreter with argv
         interpreter.start(thread_info.args)
 
-        self._scheduler.add_thread(interpreter)
+        # add to programs
+        program_node = self._programs.setdefault(thread_info.program_id, dict())
+        program_node[thread_info.thread_id] = interpreter
+
+        # add to own programs(status only)
+        program_node = self._own_programs.setdefault(thread_info.program_id, dict())
+        program_node[thread_info.thread_id] = interpreter.status
+
+        # let comms know we have a new thread
+        self._comms.update_thread_location(
+                (thread_info.program_id, thread_info.thread_id),
+                self.id )
 
     def pack_thread(self, program_id, thread_id):
         """ Pack a thread with it's state and code, into a transferable blob"""
@@ -76,7 +90,7 @@ class Runtime(object):
         interpreter.load_state(package.state)
         self._scheduler.add_thread(interpreter)
 
-        # Set thread location to local runtime
+        # let comms know we have a new thread
         self._comms.update_thread_location( (program_id, thread_id), runtime_id )
 
     def shutdown(self):
@@ -87,27 +101,108 @@ class Runtime(object):
 
     def run(self):
         changes = self._comms.get_status_requests()
-        self._scheduler.update_remote_threads(changes)
+        self.update_remote_threads(changes)
 
-        for instruction in self._scheduler.get_next():
-            try:
-                instruction()
-            except StatusChange as sc:
-                self._comms.send_status_request(
-                        sc.runtime_id,
-                        (sc.program_id, sc.thread_id),
-                        sc.status)
 
-            except Exception as ex:
-                self.logger.error('Thread {} of program {} failed!'.format(
-                    inter.thread_id,
-                    inter.program_id))
-                self.logger.error(str(ex))
+        # if we get an empty list, either everyone is blocked, or they are all finished
+        list = self._get_next_round()
+        while list:
+            for inter in list:
+                inter = list.pop()
 
-                # thread failed
-                self.on_thread_fail(inter)
+                try:
+                    inter.exec_next()
+                except StatusChange as sc:
+                    self._comms.send_status_request(
+                            sc.runtime_id,
+                            (sc.program_id, sc.thread_id),
+                            sc.status)
+                    print(sc.program_id, sc.thread_id, sc.status)
 
-                self.shutdown()
+                except Exception as ex:
+                    self.logger.error('Thread failed')
+                    self.logger.error(str(ex))
+
+                    self.on_thread_fail(inter)
+
+                    self.shutdown()
+                    break
+
+            list = self._get_next_round()
+
+
+
+    def check_for_deadlocks(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.BLOCKED:
+                return
+        print('omg deadlock')
+
+    def check_if_finished(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.FINISHED:
+                return
+
+        del self._own_programs[program_id]
+
+        if program_id in self._programs:
+            del self._programs[program_id]
+
+
+    def update_status(self, inter):
+        """ Update status, if this is not our thread notify
+        the responsible runtime for its thread's status """
+        if program_id in self._own_programs:
+            self._own_programs[inter.program_id][inter.thread_id] = status
+            if status == InterpreterStatus.BLOCKED:
+                self.check_for_deadlocks(inter.program_id)
+
+        # update inter status
+        self._programs[inter.program_id][inter.thread_id].status = status
+
+
+    def _get_next_round(self):
+        """ Generate a run list and yield threads in a round-robin fashion """
+
+        run_list = [ ]
+        while not run_list:
+            for inter in itertools.chain(*( child.values() for child in self._programs.values())):
+                status = inter.status
+                if status == InterpreterStatus.RUNNING:
+                    run_list.append(inter)
+                elif (status == InterpreterStatus.SLEEPING and time.time() >= inter.wake_up_at):
+                    inter.status = InterpreterStatus.RUNNING
+                    run_list.append(inter)
+
+                elif (status == InterpreterStatus.BLOCKED and
+                        self._comms.can_receive_message( (inter.program_id, inter.thread_id) ) ):
+                    inter.status = InterpreterStatus.RUNNING
+                    run_list.append(inter)
+
+
+            if not run_list:
+                time.sleep(0.1)
+        return run_list
+
+
+
+    def add_thread(self, inter):
+        thread_list = self._programs.setdefault(inter.program_id, dict())
+        thread_list[inter.thread_id] = inter
+
+        if inter.runtime_id == self.id:
+            program_node = self._own_programs.setdefault(inter.program_id, dict())
+            program_node[inter.thread_id] = inter.status
+
+    def update_remote_threads(self, statuses):
+        """ Check for status changes for OUR threads from remote runtimes """
+        for update in statuses:
+            ( (program_id, thread_id), status ) = update
+            self._own_programs[program_id][thread_id] = status
+            if status == InterpreterStatus.BLOCKED:
+                self.check_for_deadlocks(program_id)
+            elif status == InterpreterStatus.FINISHED:
+                self.check_if_finished(program_id)
 
 
 class ThreadPackage(object):

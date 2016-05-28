@@ -109,7 +109,7 @@ class SimpleScriptInterpreter(object):
     def exec_next(self):
             try:
                 instruction = self.code.instructions[self._pc]
-                #print(instruction)
+                print(instruction)
             except IndexError:
                 raise RuntimeError("Program finished without calling RET!")
 
@@ -195,7 +195,7 @@ class SimpleScriptInterpreter(object):
 
             # save who we are waiting from and propagate
             self.waiting_from = (self.program_id, who)
-            self._stack = InterpreterStatus.BLOCKED
+            self._status = InterpreterStatus.BLOCKED
             raise StatusChange(self.runtime_id, self.program_id, self.thread_id, self._status)
         self._stack.append(msg)
 
