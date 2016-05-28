@@ -18,8 +18,8 @@ class Runtime(object):
         self.id = fast_hash( datetime.now().isoformat(), length=4)
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
-        self._comms = EchoCommunication(interface)
-        #self._comms = NetworkCommunication(self.id, interface)
+        #self._comms = EchoCommunication(interface)
+        self._comms = NetworkCommunication(self.id, interface)
         self._scheduler = RuntimeScheduler(self.id, self._comms)
 
     def load_program(self, filename):
