@@ -9,6 +9,8 @@ from gridvm.network.protocol.packet.factory import make_packet, make_packet
 from gridvm.network.protocol.packet.ptype  import PacketType
 from gridvm.simplescript.runtime.utils import fast_hash
 
+from .utils import get_if_address
+
 MULTICAST_IP = '224.0.0.1'
 MULTICAST_PORT = 19999
 
@@ -24,9 +26,11 @@ class NetHandler:
         self.runtimes = { }         # <runtime_id> -> <ip, port>
 
         # hack to find own local IP (TODO: user should give its own local IP)
-        f = os.popen('ifconfig {} | grep "inet\ addr" | cut -d: -f2 | cut -d" " -f1'
-                        .format(net_interface))
-        self.ip = f.read().strip()
+        #f = os.popen('ifconfig {} | grep "inet\ addr" | cut -d: -f2 | cut -d" " -f1'
+        #    .format(net_interface))
+        #self.ip = f.read().strip()
+        self.ip = get_if_address(net_interface)
+        self.logger.debug('Local: {}.{}'.format(net_interface, self.ip))
 
         ################ SOCKETS #################
         context = self.context = zmq.Context()
