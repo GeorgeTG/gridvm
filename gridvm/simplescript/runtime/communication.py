@@ -72,9 +72,15 @@ class NetworkCommunication:
         packet = make_packet(
             PacketType.THREAD_MESSAGE,
             thread_uid=thread_uid,
-            payload=msg
+            msg=msg
         )
         self._to_send.put( (runtime_id, packet) )
+
+    def add_thread_message(self, packet):
+        """ Called from NetHandler to add a new thread message which has arrived """
+        thread_uid, msg = packet['thread_uid'], packet['msg']
+        self._messages[thread_uid].put(msg)
+
 
     def get_print_requests(self):
         """ Called from Runtime to get a list of print requests for its own threads """
@@ -87,23 +93,20 @@ class NetworkCommunication:
                 -- thread_uid:  (program_id, thread_id)
                 -- msg:         message to print
         """
-
         # TODO: find a way to get original runtime id
-        #runtime_id = self._get_runtime_id(who)
+        raise NotImplemented()
 
-        """
         packet = make_packet(
             PacketType.RUNTIME_PRINT_REQ,
             thread_uid=thread_uid,
             msg=msg
         )
         self._to_send.put( (runtime_id, packet) )
-        """
-        pass
 
     def add_print_request(self, packet):
         """ Called from NetHandler to add a print request which has arrived """
-        pass
+        thread_uid, msg = packet['thread_uid'], packet['msg']
+        self._print_req.put( (thread_uid, msg))
 
     def get_status_requests(self):
         """ Called from Runtime to get a list of thread status changes of its own threads """
@@ -112,14 +115,20 @@ class NetworkCommunication:
     def send_status_request(self, thread_uid, new_status):
         """ Called from Runtime to notify the thread's responsible runtime, for
             a thread status change """
+        # TODO: find a way to get the resposible runtime id
+        raise NotImplemented()
 
-        # TODO: find a way to get resposible runtime id
-        pass
+        packet = make_packet(
+            PacketType.RUNTIME_STATUS_REQ,
+            thread_uid=thread_uid,
+            status=new_status
+        )
+        self._to_send.put( (runtime_id, packet) )
 
     def add_status_request(self, packet):
         """ Called from NetHandler to add a thread status request which has arrived """
-        pass
-
+        thread_uid, status = packet['thread_uid'], packet['status']
+        self._status_req.put( (thread_uid, status) )
 
     def update_thread_location(self, thread_uid, new_location):
         """ Called from NetHandler once a MIGRATION_COMPLETED packet has been received
@@ -131,6 +140,7 @@ class NetworkCommunication:
         self._fwd_table[thread_uid] = new_location
 
     def get_to_send_requests(self):
+        """ Called from NetHandler """
         return self._get_list( self._status_req )
 
     def shutdown(self):
