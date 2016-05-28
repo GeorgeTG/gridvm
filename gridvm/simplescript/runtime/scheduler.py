@@ -5,62 +5,66 @@ from .inter import SimpleScriptInterpreter, InterpreterStatus
 
 class RuntimeScheduler():
 
-    def __init__(self, comms):
+    def __init__(self, runtime_id, comms):
         self.total_threads = 0
+
         self._programs = dict()
-        self._blocked_programs = dict()
         self._remote_programs = dict()
+
+        self._own_programs = dict()
+        self._my_runtime_id = runtime_id
+
         self._comms = comms
+
+    def check_for_deadlocks(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.BLOCKED:
+                return
+        print('omg deadlock')
+
+    def check_if_finished(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.FINISHED:
+                return
+
+        del self._own_programs[program_id]
+
+        if program_id in self._programs:
+            del self._programs[program_id]
+
+
+    def update_status(self, inter):
+        """ Update status, if this is not our thread notify
+        the responsible runtime for its thread's status """
+        if program_id in self._own_programs:
+            self._own_programs[inter.program_id][inter.thread_id] = status
+            if status == InterpreterStatus.BLOCKED:
+                self.check_for_deadlocks(inter.program_id)
+
+        # update inter status
+        self._programs[inter.program_id][inter.thread_id].status = status
+
 
     def _get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
-        #FIXME: this is less bad :)
 
         run_list = [ ]
         while not run_list:
             for inter in itertools.chain(*( child.values() for child in self._programs.values())):
-                print(inter.program_id, inter.thread_id, inter.status.name)
-            # Keep track of threads status
-            total_blocked = 0
-            total_sleeping = 0
-            total_finished = 0
-
-            for inter in itertools.chain(*( child.values() for child in self._programs.values())):
                 status = inter.status
-
                 if status == InterpreterStatus.RUNNING:
                     run_list.append(inter)
-
-                elif (status == InterpreterStatus.SLEEPING and
-                        time.time() >= inter.wake_up_at):
-                    # wake this one up
+                # TODO: change if we want to be notified about all status changes
+                elif (status == InterpreterStatus.SLEEPING and time.time() >= inter.wake_up_at):
                     inter.status = InterpreterStatus.RUNNING
                     run_list.append(inter)
+                else:
+                    self._update_status(inter)
 
-                elif (status == InterpreterStatus.BLOCKED and
-                        self._comms.can_receive_message(inter.waiting_from)):
-                    # can unblock
-                    inter.status = InterpreterStatus.RUNNING
-                    run_list.append(inter)
-
-                elif status == InterpreterStatus.BLOCKED:
-                    total_blocked += 1
-
-                elif status == InterpreterStatus.SLEEPING:
-                    total_sleeping += 1
-
-                elif status == InterpreterStatus.FINISHED:
-                    total_finished += 1
-
-            if total_blocked == self.total_threads - total_finished:
-                self.logger.error("DEADLOCK! ABORTING!")
-                raise RuntimeError
-
-            if total_sleeping == self.total_threads - total_finished:
-                self.logger.debug("All threads are sleeping...")
+            if not run_list:
                 time.sleep(0.1)
-
         return run_list
+
 
     def get_next(self):
         # if we get an empty list, either everyone is blocked, or they are all finished
@@ -77,10 +81,21 @@ class RuntimeScheduler():
         thread_list = self._programs.setdefault(inter.program_id, dict())
         thread_list[inter.thread_id] = inter
 
-        self.total_threads += 1
+        if inter.runtime_id == self._my_runtime_id:
+            program_node = self._own_programs.setdefault(inter.program_id, dict())
+            program_node[inter.thread_id] = inter.status
+
+    def update_remote_threads(self, statuses):
+        """ Check for status changes for OUR threads from remote runtimes """
+        for update in statuses:
+            ( (program_id, thread_id), status ) = update
+            self._own_programs[program_id][thread_id] = status
+            if status == InterpreterStatus.BLOCKED:
+                self.check_for_deadlocks(program_id)
+            elif status == InterpreterStatus.FINISHED:
+                self.check_if_finished(program_id)
 
     def pop_thread(self, program_id, thread_id):
-        self.total_threads -= 1
         return self._programs[program_id].pop(thread_id)
 
     def __getitem__(self, program_id):
@@ -88,3 +103,5 @@ class RuntimeScheduler():
 
     def __delitem__(self, program_id):
         del self._programs[program_id]
+
+

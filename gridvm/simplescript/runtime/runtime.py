@@ -10,6 +10,7 @@ from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import fast_hash
 from .scheduler import RuntimeScheduler
+from ..ss_exception import StatusChange
 
 class Runtime(object):
     def __init__(self, interface, bind_addres=None, mcast_address=None):
@@ -19,7 +20,7 @@ class Runtime(object):
 
         self._comms = EchoCommunication(interface)
         #self._comms = NetworkCommunication(self.id, interface)
-        self._scheduler = RuntimeScheduler(self._comms)
+        self._scheduler = RuntimeScheduler(self.id, self._comms)
 
     def load_program(self, filename):
         """ Load a program description  from a .mtss file """
@@ -75,6 +76,9 @@ class Runtime(object):
         interpreter.load_state(package.state)
         self._scheduler.add_thread(interpreter)
 
+        # Set thread location to local runtime
+        self._comms.update_thread_location( (program_id, thread_id), runtime_id )
+
     def shutdown(self):
         self._comms.shutdown()
 
@@ -82,9 +86,18 @@ class Runtime(object):
         del self._scheduler[failed_inter.program_id]
 
     def run(self):
+        changes = self._comms.get_status_requests()
+        self._scheduler.update_remote_threads(changes)
+
         for instruction in self._scheduler.get_next():
             try:
                 instruction()
+            except StatusChange as sc:
+                self._comms.send_status_request(
+                        sc.runtime_id,
+                        (sc.program_id, sc.thread_id),
+                        sc.status)
+
             except Exception as ex:
                 self.logger.error('Thread {} of program {} failed!'.format(
                     inter.thread_id,

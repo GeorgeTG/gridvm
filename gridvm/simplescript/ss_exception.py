@@ -7,8 +7,12 @@ def reverse_find(haystack, needle, index):
         return -1
 
 
-class BlockedOperation(Exception):
-    pass
+class StatusChange(Exception):
+    def __init__(self,runtime_id, program_id, thread_id, status):
+        self.runtime_id = runtime_id
+        self.program_id = program_id
+        self.thread_id = thread_id
+        self.status = status
 
 class CodeException(Exception):
     def __init__(self, source, pos, lineno, total, message):

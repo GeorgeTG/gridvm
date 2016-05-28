@@ -4,7 +4,7 @@ from pathlib import Path
 from enum import IntEnum, unique
 
 from ..codegen.ss_bcode import OpCode, Operation
-from ..ss_exception import BlockedOperation
+from ..ss_exception import StatusChange
 
 @unique
 class InterpreterStatus(IntEnum):
@@ -66,8 +66,6 @@ class SimpleScriptInterpreter(object):
                 self._nop
         ]
 
-        # Set thread location to local runtime
-        self._comms.update_thread_location( (program_id, thread_id), runtime_id )
 
     @property
     def status(self):
@@ -117,9 +115,10 @@ class SimpleScriptInterpreter(object):
 
             try:
                 self.__map[instruction.opcode](instruction.arg)
-            except BlockedOperation:
-                self._status = InterpreterStatus.BLOCKED
-                return # don't increment PC
+            except StatusChange:
+                if self._status != InterpreterStatus.BLOCKED:
+                    self._pc += 1
+                raise # propagate
             except Exception as ex:
                 error_msg =  'Execution failed!\n'
                 error_msg += 'Instruction: {}\n'.format(str(self.code.instructions[self._pc]))
@@ -129,11 +128,6 @@ class SimpleScriptInterpreter(object):
                 self.print_state()
 
                 raise RuntimeError(error_msg)
-
-            # TODO: add function that should be executed right after a command
-            #       (e.g) when a state changes it should send a msg to the
-            #       coresponding vm or when a print occures, the printing must
-            #       happen in the responsible vm
 
             self._pc += 1
 
@@ -199,8 +193,10 @@ class SimpleScriptInterpreter(object):
             # re-insert address in stack
             self._stack.append(who)
 
+            # save who we are waiting from and propagate
             self.waiting_from = (self.program_id, who)
-            raise BlockedOperation
+            self._stack = InterpreterStatus.BLOCKED
+            raise StatusChange(self.runtime_id, self.program_id, self.thread_id, self._status)
         self._stack.append(msg)
 
     def _snd(self, arg=None):
@@ -211,6 +207,7 @@ class SimpleScriptInterpreter(object):
     def _slp(self, arg):
         self.wake_up_at = time.time() + self._stack.pop()
         self._status = InterpreterStatus.SLEEPING
+        raise StatusChange(self.runtime_id, self.program_id, self.thread_id, self._status)
 
     def _nop(self, arg):
         pass
@@ -220,3 +217,4 @@ class SimpleScriptInterpreter(object):
 
     def _ret(self, arg=None):
         self._status = InterpreterStatus.FINISHED
+        raise StatusChange(self.runtime_id, self.program_id, self.thread_id, self._status)
