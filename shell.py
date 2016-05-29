@@ -8,7 +8,7 @@ from collections import OrderedDict
 from threading import Thread
 
 import logging
-#logging.disable(logging.ERROR)
+logging.disable(logging.WARN)
 
 from gridvm.simplescript.runtime.runtime import Runtime, LocalRequest
 #                      YO DWAG, WE HEARD YOU LIKE RUNTIMES
@@ -16,7 +16,7 @@ from gridvm.simplescript.runtime.runtime import Runtime, LocalRequest
 import blessings
 
 term = blessings.Terminal()
-VERSION = 0.3
+VERSION = 0.1
 
 CHECK = term.green('✓')
 CROSS = term.red('✘')
@@ -26,6 +26,7 @@ PROMPT = '{}|{}~>{}'.format(term.green, term.red, term.normal)
 REQUIRED = '1-3-3-7'
 
 COMMANDS = OrderedDict()
+COMMANDS['this'] = [ ]
 COMMANDS['list_runtimes'] = [ ]
 COMMANDS['list_programs'] = [ ]
 COMMANDS['shutdown'] = [ ]
@@ -38,6 +39,7 @@ COMMANDS['exit'] = []
 
 
 DESCRIPTIONS = {
+    'this': "Print this runtime's id",
     'list_runtimes': 'List all runtimes',
     'list_programs': 'List programs for this runtime',
     'migrate': 'Migrate a thread to another runtime',
@@ -55,19 +57,84 @@ lines = 1
 
 programs = []
 threads = []
+runtimes = []
+runtime_ips = {}
 
-
-def list_programs():
+def update_programs():
     global runtime, programs, threads
     runtime.add_local_request(LocalRequest.LIST_PROGRAMS)
     (programs, threads) = runtime.get_local_result()
+
+def update_runtimes():
+    global runtime, runtimes, runtime_ips
+    runtime.add_local_request(LocalRequest.LIST_RUNTIMES)
+    runtimes_dict = runtime.get_local_result()
+
+    runtimes = []
+    runtime_ips = {}
+    for runtime_id, address in runtimes_dict.items():
+        runtimes.append(runtime_id)
+        runtime_ips[runtime_id] = address
+
+def list_programs():
+    global runtime, programs, threads
+    update_programs()
     for i, program in enumerate(programs):
-        print('{}: Program {}:'.format(i, program))
-        print('Index | Real ID')
+        pinfo('{}: Program {}:'.format(i, program))
+        pinfo('Index | Real ID')
         for j, thread in enumerate(threads[i]):
-            print('     {}:{}'.format(j, thread))
+            pinfo('     {}:{}'.format(j, thread))
 
     return True
+
+
+def this():
+    global runtime
+    pinfo('My id is: ' + str(runtime.id))
+    return True
+
+def list_runtimes():
+    global runtime, runtime_ips
+    update_runtimes()
+    # clear local runtimes
+    runtimes = []
+    for i, (runtime_id, address) in enumerate(runtime_ips.items()):
+        if runtime_id == runtime.id:
+            pinfo('Runtime {}:[{}] >>ME<< @ {}:{}'.format(i, runtime_id, *address))
+        else:
+            pinfo('Runtime {}:[{}] @ {}:{}'.format(i, runtime_id, *address))
+        runtimes.append(runtime_id)
+
+    return True
+
+def migrate(program_id, thread_id, runtime_id):
+    global runtime, runtimes, programs, threads
+    program_id = int(program_id)
+    thread_id = int(thread_id)
+    runtime_id = int(runtime_id)
+
+    pinfo('Updating programms and runtimes...')
+    update_runtimes()
+    update_programs()
+    try:
+        dest_program = programs[program_id]
+        program_threads = threads[program_id]
+        dest_thread = program_threads[thread_id]
+    except (IndexError, ValueError):
+        perror('No such thread {}:{}'.format(program_id, thread_id))
+        return False
+    try:
+        dest_runtime = runtimes[runtime_id]
+    except ValueError:
+        perror('No such runtime!')
+        return False
+
+    runtime.add_local_request(LocalRequest.MIGRATE, (dest_program, dest_thread, dest_runtime))
+    result, msg = runtime.get_local_result()
+    if msg:
+        perror(msg)
+
+    return result
 
 def command_ok():
     global last_len
@@ -86,7 +153,7 @@ def shutdown():
     runtime.shutdown()
 
 def version():
-    print("{}hermes shell {}v{}{}{}".format(
+    print("{}GridVM shell {}v{}{}{}".format(
         term.cyan, term.red, term.green, VERSION, term.normal))
 
 def clear():

@@ -213,9 +213,15 @@ class Runtime(object):
             while True:
                 req, arg = self._request_q.get(block=False)
                 if req == LocalRequest.MIGRATE:
-                    self.request_migration(*arg)
+                    try:
+                        self.migrate_thread(*arg)
+                        self._request_rep.put( (True, None) )
+                    except KeyError:
+                        self._request_rep.put( (False, 'No such thread') )
                 elif req == LocalRequest.LIST_PROGRAMS:
                     self._request_rep.put( self.get_thread_names() )
+                elif req == LocalRequest.LIST_RUNTIMES:
+                    self._request_rep.put( self._comms.get_runtimes() )
         except Empty:
             pass
 
@@ -299,7 +305,6 @@ class Runtime(object):
 
     def migrate_thread(self, program_id, thread_id, runtime_id):
         """ Start the migration process for thread_uid to runtime_id """
-        self.logger.info('Migrating ({}, {}) to {}'.format(program_id, thread_id, runtime_id))
 
         thread_package = self.pack_thread(program_id, thread_id)
         success = self._comms.migrate_thread(
@@ -308,6 +313,7 @@ class Runtime(object):
             runtime_id
         )
 
+        self.logger.info('Migrating ({}, {}) to {}'.format(program_id, thread_id, runtime_id))
         if not success:
             self.unpack_thread(thread_package)
             self.logger.warning('Migration failed')
