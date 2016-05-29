@@ -110,11 +110,13 @@ class Runtime(object):
                     run_list.append(inter)
                 elif (status == InterpreterStatus.SLEEPING and time.time() >= inter.wake_up_at):
                     inter.status = InterpreterStatus.RUNNING
+                    self.update_status(inter)
                     run_list.append(inter)
 
                 elif (status == InterpreterStatus.BLOCKED and
-                        self._comms.can_receive_message( (inter.program_id, inter.thread_id) ) ):
+                        self._comms.can_receive_message(inter.waiting_from) ):
                     inter.status = InterpreterStatus.RUNNING
+                    self.update_status(inter)
                     run_list.append(inter)
 
             if not run_list:
@@ -134,15 +136,16 @@ class Runtime(object):
                 inter = list.pop()
 
                 try:
+                    print('running', inter.program_id, inter.thread_id)
                     inter.exec_next()
                 except StatusChange as sc:
+                    # interpreter changed the status of this thread
                     self._comms.send_status_request(
                             sc.runtime_id,
                             (sc.program_id, sc.thread_id),
                             sc.status)
 
                     self.update_status(inter)
-                    print(sc.program_id, sc.thread_id, sc.status)
 
                 except Exception as ex:
                     self.logger.error('Thread failed')
@@ -157,22 +160,27 @@ class Runtime(object):
 
 
 
-    def check_for_deadlocks(self, program_id):
+    def sanity_check(self, program_id):
+        total_threads = 0
+        finished_threads = 0
+        blocked_threads = 0
         for status in self._own_programs[program_id].values():
-            if status != InterpreterStatus.BLOCKED:
-                return
-        raise RuntimeError
+            if status == InterpreterStatus.FINISHED:
+                finished_threads += 1
+            elif status == InterpreterStatus.BLOCKED:
+                blocked_threads += 1
 
-    def check_if_finished(self, program_id):
-        for status in self._own_programs[program_id].values():
-            if status != InterpreterStatus.FINISHED:
-                return
+            total_threads += 1
 
-        del self._own_programs[program_id]
-
-        if program_id in self._programs:
+        if finished_threads == total_threads:
+            self.logger.info('Program {} finished.'.format(program_id))
             del self._programs[program_id]
 
+            if program_id in self._own_programs:
+                del self._own_programs[program_id]
+
+        elif blocked_threads == total_threads:
+            self.logger.error('Program {} is in a DEADLOCK'.format(program_id))
 
     def update_status(self, inter):
         """ Update status, if this is not our thread notify
@@ -180,12 +188,17 @@ class Runtime(object):
         if inter.program_id in self._own_programs:
             self._own_programs[inter.program_id][inter.thread_id] = inter.status
             if inter.status == InterpreterStatus.BLOCKED:
-                self.check_for_deadlocks(inter.program_id)
+                self.sanity_check(inter.program_id)
+            elif inter.status == InterpreterStatus.FINISHED:
+                # delete finished thread
+                self.logger.debug("{}.{} finished".format(inter.program_id, inter.thread_id))
+                del self._programs[inter.program_id][inter.thread_id]
+                if inter.program_id in self._own_programs:
+                    del self._own_programs[inter.program_id][inter.thread_id]
+                self.sanity_check(inter.program_id)
 
         # update inter status
-        self._programs[inter.program_id][inter.thread_id].status = inter.status
-
-
+        #self._programs[inter.program_id][inter.thread_id].status = inter.status
 
     def add_thread(self, inter):
         thread_list = self._programs.setdefault(inter.program_id, dict())
