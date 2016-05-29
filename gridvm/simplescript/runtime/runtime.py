@@ -71,11 +71,10 @@ class Runtime(object):
 
     def pack_thread(self, program_id, thread_id):
         """ Pack a thread with it's state and code, into a transferable blob"""
-        inter = self._scheduler.pop_thread(program_id, thread_id)
+        inter = self._programs[program_id].pop(thread_id)
         return ThreadPackage.from_inter(inter).pack()
 
     def unpack_thread(self, blob):
-        self.total_threads += 1
         """ Create a thread from a package """
         package = ThreadPackage.unpack(blob)
 
@@ -88,16 +87,28 @@ class Runtime(object):
 
         # load stack, memory etc
         interpreter.load_state(package.state)
-        self._scheduler.add_thread(interpreter)
+
+        # add thread to programs
+        program_node = self._own_programs.setdefault(package.program_id, dict())
+        program_node[pacakge.thread_id] = interpreter
 
         # let comms know we have a new thread
-        self._comms.update_thread_location( (program_id, thread_id), runtime_id )
+        self._comms.update_thread_location(
+                (package.program_id, package.thread_id),
+                package.runtime_id )
 
     def shutdown(self):
         self._comms.shutdown()
 
     def on_thread_fail(self, failed_inter):
-        del self._scheduler[failed_inter.program_id]
+        """ Called when a Thread fails """
+        failed_inter.status = InterpreterStatus.CRASHED
+        self.update_status(failed_inter)
+
+        del self._programs[failed_inter.program_id]
+
+        if failed_inter.program_id in self._own_programs:
+            del self._own_programsp[failed_inter.program_id]
 
     def _get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """

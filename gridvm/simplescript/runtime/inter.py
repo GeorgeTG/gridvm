@@ -12,7 +12,8 @@ class InterpreterStatus(IntEnum):
     SLEEPING = 1,
     BLOCKED = 2,
     STOPPED = 3,
-    FINISHED = 4
+    FINISHED = 4,
+    CRASHED = 5
 
 MAGIC = 0xC0DE10CC
 
