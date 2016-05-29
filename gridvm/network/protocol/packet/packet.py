@@ -30,7 +30,10 @@ class Packet():
         return self._meta.items()
 
     def __getitem__(self, key):
-        return self._meta[key]
+        item = self._meta[key]
+        if isinstance(item, list):
+           return tuple(item)
+        return item
 
     def __setitem__(self, key, value):
         self._meta[key] = value
