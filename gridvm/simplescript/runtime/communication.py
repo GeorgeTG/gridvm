@@ -176,11 +176,11 @@ class NetworkCommunication:
 
 
 
-    def get_migration_threads(self):
+    def get_migrated_threads(self):
         """ Called from Runtime to get a list of newly migrated threads """
         return self._get_list( self._migration_req )
 
-    def migrate_thread(self, thread_package, new_location):
+    def migrate_thread(self, thread_uid, thread_package, new_location):
         """ Called from Runtime to migrate the thread
 
         Parameters:
@@ -193,13 +193,13 @@ class NetworkCommunication:
         # Send packet
         packet = make_packet(
             PacketType.MIGRATE_THREAD,
-            thread_uid=(thread_package.program_id, thread_package.thread_id),
-            payload=thread_package.pack()
+            thread_uid=thread_uid,
+            payload=thread_package
         )
         self._to_send.put( (new_location, packet) )
 
         # Wait for ACK
-        self._migrate_sem.aquire()
+        self._migrate_sem.acquire()
 
         # Update thread location
         if self._migrate_sucess:
@@ -207,8 +207,6 @@ class NetworkCommunication:
             return True
 
         return False
-
-        # TODO: On return remove from threads
 
     def migrate_thread_completed(self, result):
         """ Called from NetHandler to signal runtime that the migration is over """
@@ -227,6 +225,7 @@ class NetworkCommunication:
 
     def update_thread_location(self, thread_uid, new_location):
         """ Called from NetHandler once a MIGRATION_COMPLETED packet has been received
+                or from Runtime to update its own threads location
 
         Parameters:
             -- thread_uid:       (program_id, thread_id)
@@ -238,9 +237,13 @@ class NetworkCommunication:
         """ Called from NetHandler """
         return self._get_list( self._to_send )
 
+    def get_runtimes(self):
+        return self.nethandler.runtimes
+
     def shutdown(self):
         # TODO: move all foreign threads to other runtimes
-        pass
+
+        self.nethandler.shutdown()
 
     def _get_list(self, queue):
         """ Return a list from a ThreadSafe Queue """

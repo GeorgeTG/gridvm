@@ -109,7 +109,7 @@ class NetHandler:
                     PacketType.RUNTIME_PRINT_REQ,   # Local
                     PacketType.MIGRATE_THREAD,
                     PacketType.MIGRATION_COMPLETED  # Multicast
-                ], timeout=2000)
+                ], timeout=10000)
             except KeyboardInterrupt:
                 self.shutdown()
                 continue
@@ -227,6 +227,7 @@ class NetHandler:
                     self.send_reply(addr, PacketType.ACK)
 
                 # Add new thread to runtime
+                packet['thread_uid'] = tuple(packet['thread_uid'])
                 self.comms.add_thread_migration(packet)
 
                 # Broadcast MIGRATION_COMPLETED packet
@@ -241,7 +242,8 @@ class NetHandler:
 
             elif packet.type == PacketType.MIGRATION_COMPLETED:
                 # Update thread location
-                self.comms.update_thread_location(packet)
+                thread_uid, new_location = packet['thread_uid'], packet['runtime_id']
+                self.comms.update_thread_location(thread_uid, new_location)
 
 
         self.cleanup()
