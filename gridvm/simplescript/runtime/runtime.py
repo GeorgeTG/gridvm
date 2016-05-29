@@ -99,68 +99,6 @@ class Runtime(object):
     def on_thread_fail(self, failed_inter):
         del self._scheduler[failed_inter.program_id]
 
-    def run(self):
-        changes = self._comms.get_status_requests()
-        self.update_remote_threads(changes)
-
-
-        # if we get an empty list, either everyone is blocked, or they are all finished
-        list = self._get_next_round()
-        while list:
-            for inter in list:
-                inter = list.pop()
-
-                try:
-                    inter.exec_next()
-                except StatusChange as sc:
-                    self._comms.send_status_request(
-                            sc.runtime_id,
-                            (sc.program_id, sc.thread_id),
-                            sc.status)
-                    print(sc.program_id, sc.thread_id, sc.status)
-
-                except Exception as ex:
-                    self.logger.error('Thread failed')
-                    self.logger.error(str(ex))
-
-                    self.on_thread_fail(inter)
-
-                    self.shutdown()
-                    break
-
-            list = self._get_next_round()
-
-
-
-    def check_for_deadlocks(self, program_id):
-        for status in self._own_programs[program_id].values():
-            if status != InterpreterStatus.BLOCKED:
-                return
-        print('omg deadlock')
-
-    def check_if_finished(self, program_id):
-        for status in self._own_programs[program_id].values():
-            if status != InterpreterStatus.FINISHED:
-                return
-
-        del self._own_programs[program_id]
-
-        if program_id in self._programs:
-            del self._programs[program_id]
-
-
-    def update_status(self, inter):
-        """ Update status, if this is not our thread notify
-        the responsible runtime for its thread's status """
-        if program_id in self._own_programs:
-            self._own_programs[inter.program_id][inter.thread_id] = status
-            if status == InterpreterStatus.BLOCKED:
-                self.check_for_deadlocks(inter.program_id)
-
-        # update inter status
-        self._programs[inter.program_id][inter.thread_id].status = status
-
-
     def _get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
 
@@ -179,10 +117,73 @@ class Runtime(object):
                     inter.status = InterpreterStatus.RUNNING
                     run_list.append(inter)
 
-
             if not run_list:
                 time.sleep(0.1)
         return run_list
+
+
+    def run(self):
+        changes = self._comms.get_status_requests()
+        self.update_remote_threads(changes)
+
+
+        # if we get an empty list, either everyone is blocked, or they are all finished
+        list = self._get_next_round()
+        while list:
+            for inter in list:
+                inter = list.pop()
+
+                try:
+                    inter.exec_next()
+                except StatusChange as sc:
+                    self._comms.send_status_request(
+                            sc.runtime_id,
+                            (sc.program_id, sc.thread_id),
+                            sc.status)
+
+                    self.update_status(inter)
+                    print(sc.program_id, sc.thread_id, sc.status)
+
+                except Exception as ex:
+                    self.logger.error('Thread failed')
+                    self.logger.error(str(ex))
+
+                    self.on_thread_fail(inter)
+
+                    self.shutdown()
+                    raise
+
+            list = self._get_next_round()
+
+
+
+    def check_for_deadlocks(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.BLOCKED:
+                return
+        raise RuntimeError
+
+    def check_if_finished(self, program_id):
+        for status in self._own_programs[program_id].values():
+            if status != InterpreterStatus.FINISHED:
+                return
+
+        del self._own_programs[program_id]
+
+        if program_id in self._programs:
+            del self._programs[program_id]
+
+
+    def update_status(self, inter):
+        """ Update status, if this is not our thread notify
+        the responsible runtime for its thread's status """
+        if inter.program_id in self._own_programs:
+            self._own_programs[inter.program_id][inter.thread_id] = inter.status
+            if inter.status == InterpreterStatus.BLOCKED:
+                self.check_for_deadlocks(inter.program_id)
+
+        # update inter status
+        self._programs[inter.program_id][inter.thread_id].status = inter.status
 
 
 

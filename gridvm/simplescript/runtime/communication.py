@@ -59,7 +59,7 @@ class NetworkCommunication:
 
         # Create queue if not exist
         queue = self._messages.setdefault(thread_uid, Queue())
-
+        print(queue)
         try:
             return queue.get(block=False)
         except Empty:

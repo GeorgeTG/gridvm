@@ -109,7 +109,7 @@ class SimpleScriptInterpreter(object):
     def exec_next(self):
             try:
                 instruction = self.code.instructions[self._pc]
-                print(instruction)
+                #print(instruction)
             except IndexError:
                 raise RuntimeError("Program finished without calling RET!")
 
