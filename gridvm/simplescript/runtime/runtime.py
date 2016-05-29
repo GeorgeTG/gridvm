@@ -4,6 +4,7 @@ import time
 import itertools
 
 from datetime import datetime
+from queue import Queue, Empty
 
 from gridvm.logger import get_logger
 from .communication import NetworkCommunication, EchoCommunication
@@ -21,6 +22,8 @@ class Runtime(object):
         self._programs = dict()
         self._remote_programs = dict()
         self._own_programs = dict()
+
+        self._migration_req = Queue()
 
         #self._comms = EchoCommunication(interface)
         self._comms = NetworkCommunication(self.id, interface)
@@ -76,6 +79,7 @@ class Runtime(object):
 
     def unpack_thread(self, blob):
         """ Create a thread from a package """
+        #self.total_threads += 1
         package = ThreadPackage.unpack(blob)
 
         interpreter = SimpleScriptInterpreter(
@@ -89,13 +93,16 @@ class Runtime(object):
         interpreter.load_state(package.state)
 
         # add thread to programs
-        program_node = self._own_programs.setdefault(package.program_id, dict())
-        program_node[pacakge.thread_id] = interpreter
+        program_node = self._programs.setdefault(package.program_id, dict())
+        program_node[package.thread_id] = interpreter
 
         # let comms know we have a new thread
+        """
         self._comms.update_thread_location(
                 (package.program_id, package.thread_id),
-                package.runtime_id )
+                package.runtime_id
+        )
+        """
 
     def shutdown(self):
         self._comms.shutdown()
@@ -131,14 +138,14 @@ class Runtime(object):
                     run_list.append(inter)
 
             if not run_list:
+                self.logger.debug('Sleeping for 100ms ...')
                 time.sleep(0.1)
-        return run_list
 
+        return run_list
 
     def run(self):
         changes = self._comms.get_status_requests()
         self.update_remote_threads(changes)
-
 
         # if we get an empty list, either everyone is blocked, or they are all finished
         list = self._get_next_round()
@@ -147,7 +154,7 @@ class Runtime(object):
                 inter = list.pop()
 
                 try:
-                    print('running', inter.program_id, inter.thread_id)
+                    #print('running', inter.program_id, inter.thread_id)
                     inter.exec_next()
                 except StatusChange as sc:
                     # interpreter changed the status of this thread
@@ -167,9 +174,18 @@ class Runtime(object):
                     self.shutdown()
                     raise
 
+            # Check for migrations requests from shell
+            try:
+                while True:
+                    self.migrate_thread( *self._migration_req.get(block=False) )
+            except Empty:
+                pass
+
+            # Check for migrations sent over the network
+            for thread_blob in self._comms.get_migrated_threads():
+                self.unpack_thread(thread_blob)
+
             list = self._get_next_round()
-
-
 
     def sanity_check(self, program_id):
         total_threads = 0
@@ -229,6 +245,26 @@ class Runtime(object):
             elif status == InterpreterStatus.FINISHED:
                 self.check_if_finished(program_id)
 
+    def request_migration(self, program_id, thread_id, runtime_id):
+        """ Called from shell """
+        self._migration_req.put((program_id, thread_id, runtime_id))
+
+    def migrate_thread(self, program_id, thread_id, runtime_id):
+        """ Start the migration process for thread_uid to runtime_id """
+        self.logger.info('Migrating ({}, {}) to {}'.format(program_id, thread_id, runtime_id))
+
+        thread_package = self.pack_thread(program_id, thread_id)
+        self._comms.migrate_thread(
+            (program_id, thread_id),
+            thread_package,
+            runtime_id
+        )
+
+        self.logger.info('Migration completed!')
+
+        # Remove thread from programs
+        del self._programs[program_id][thread_id]
+
 
 class ThreadPackage(object):
     """ This class represents a thead package.
@@ -267,12 +303,26 @@ class ThreadPackage(object):
 
 if __name__ == '__main__':
     import sys
-    runtime = Runtime('eno1')
+    from threading import Thread
 
     if len(sys.argv) == 1:
         print('No program has been given..')
+        sys.exit(1)
 
-    else:
-        for i in range(len(sys.argv) - 1):
-            runtime.load_program(sys.argv[i+1])
-        runtime.run()
+    runtime = Runtime('wlan0')
+    for i in range(len(sys.argv) - 1):
+        runtime.load_program(sys.argv[i+1])
+
+    # Create thread for runtime
+    runtime_thread = Thread(target=runtime.run)
+    runtime_thread.start()
+
+    try:
+        while True:
+            program_id = input()
+            thread_id = int(input())
+            runtime_id = input()
+
+            runtime.request_migration( program_id, thread_id, runtime_id )
+    except KeyboardInterrupt:
+        runtime.shutdown()
