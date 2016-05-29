@@ -69,6 +69,25 @@ class NetworkCommunication:
         except Empty:
             return None
 
+
+    def receive_all_messages(self, thread_uid):
+        """ Called from Runtime to receive all pending messages destined for a thread
+
+        Parameters:
+            -- thread_uid: (program_id, thread_id)
+        Returns:
+            -- List of messages, or an empty list if no messages in buffer
+        """
+        messages = list()
+
+        message = self.receive_message(thread_uid)
+        while message:
+            messages.append(message)
+            message = self.receive_message(thread_uid)
+
+        return messages
+
+
     def can_receive_message(self, thread_uid):
         """ Called from Runtime to check if a message is pending for a thread
 
@@ -107,7 +126,13 @@ class NetworkCommunication:
         queue = self._messages.setdefault(thread_uid, Queue())
         queue.put(msg)
 
+    def restore_messages(self, thread_uid, messages):
+        """ Called from runtime to restore pending messages """
+        # ensure queue exists
+        queue = self._messages.setdefault(thread_uid, Queue())
 
+        for message in messages:
+            queue.put(message)
 
     def get_print_requests(self):
         """ Called from Runtime to get a list of print requests for its own threads
