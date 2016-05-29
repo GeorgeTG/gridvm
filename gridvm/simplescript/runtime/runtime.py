@@ -19,6 +19,8 @@ class Runtime(object):
         self.id = fast_hash( datetime.now().isoformat(), length=4)
         self.logger = get_logger('{}:Runtime'.format(self.id))
 
+        self.running = True
+
         self._programs = dict()
         self._remote_programs = dict()
         self._own_programs = dict()
@@ -99,6 +101,7 @@ class Runtime(object):
 
 
     def shutdown(self):
+        self.running = False
         self._comms.shutdown()
 
     def on_thread_fail(self, failed_inter):
@@ -115,7 +118,7 @@ class Runtime(object):
         self.check_for_requests()
 
         run_list = [ ]
-        while not run_list:
+        while not run_list and self.running:
             for inter in itertools.chain(*( child.values() for child in self._programs.values())):
                 status = inter.status
                 if status == InterpreterStatus.RUNNING:
@@ -245,14 +248,6 @@ class Runtime(object):
             self.sanity_check(program_id)
 
 
-    def add_thread(self, inter):
-        thread_list = self._programs.setdefault(inter.program_id, dict())
-        thread_list[inter.thread_id] = inter
-
-        if inter.runtime_id == self.id:
-            program_node = self._own_programs.setdefault(inter.program_id, dict())
-            program_node[inter.thread_id] = inter.status
-
     def request_migration(self, program_id, thread_id, runtime_id):
         """ Called from shell """
         self._migration_req.put((program_id, thread_id, runtime_id))
@@ -318,7 +313,7 @@ if __name__ == '__main__':
         print('No program has been given..')
         sys.exit(1)
 
-    runtime = Runtime('wlan0')
+    runtime = Runtime('eno1')
     for i in range(len(sys.argv) - 1):
         runtime.load_program(sys.argv[i+1])
 
