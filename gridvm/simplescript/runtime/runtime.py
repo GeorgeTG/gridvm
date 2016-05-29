@@ -103,8 +103,7 @@ class Runtime(object):
 
     def on_thread_fail(self, failed_inter):
         """ Called when a Thread fails """
-        failed_inter.status = InterpreterStatus.CRASHED
-        self.update_status(failed_inter)
+        self.update_status(failed_inter.thread_uid, failed_inter.runtime_id, InterpreterStatus.CRASHED)
 
         del self._programs[failed_inter.program_id]
 
@@ -122,18 +121,16 @@ class Runtime(object):
                 if status == InterpreterStatus.RUNNING:
                     run_list.append(inter)
                 elif (status == InterpreterStatus.SLEEPING and time.time() >= inter.wake_up_at):
-                    inter.status = InterpreterStatus.RUNNING
-                    self.update_status(inter)
+                    self.update_status(inter.thread_uid, inter.runtime_id, InterpreterStatus.RUNNING)
                     run_list.append(inter)
 
                 elif (status == InterpreterStatus.BLOCKED and
                         self._comms.can_receive_message(inter.waiting_from) ):
-                    inter.status = InterpreterStatus.RUNNING
-                    self.update_status(inter)
+                    self.update_status(inter.thread_uid, inter.runtime_id, InterpreterStatus.RUNNING)
                     run_list.append(inter)
 
             if not run_list:
-                self.logger.debug('Sleeping for 100ms ...')
+                #self.logger.debug('Sleeping for 100ms ...')
                 time.sleep(1)
                 self.check_for_requests()
 
@@ -151,12 +148,13 @@ class Runtime(object):
                     inter.exec_next()
                 except StatusChange as sc:
                     # interpreter changed the status of this thread
+                    """
                     self._comms.send_status_request(
                             sc.runtime_id,
                             (sc.program_id, sc.thread_id),
                             sc.status)
-
-                    self.update_status(inter)
+                    """
+                    self.update_status(inter.thread_uid, sc.runtime_id, sc.status)
 
                 except Exception as ex:
                     self.logger.error('Thread failed')
@@ -198,7 +196,7 @@ class Runtime(object):
         for status in self._own_programs[program_id].values():
             if status == InterpreterStatus.FINISHED:
                 finished_threads += 1
-            elif status == InterpreterStatus.BLOCKED:
+            elif status == InterpreterStatus.BLOCKED: # MAYBE AND CANNOT RECV??
                 blocked_threads += 1
 
             total_threads += 1
@@ -213,37 +211,39 @@ class Runtime(object):
         elif blocked_threads == total_threads:
             self.logger.error('Program {} is in a DEADLOCK'.format(program_id))
 
-    def update_status(self, inter):
+    def update_status(self, thread_uid, runtime_id, new_status):
         """ Update status, if this is not our thread notify
         the responsible runtime for its thread's status """
 
-        self.logger.debug('State of {}:{} is now: "{}"'.format(
-            inter.program_id, inter.thread_id, InterpreterStatus(inter.status).name
-        ))
+        #self.logger.debug('State of {}:{} is now: "{}"'.format(
+        #    *thread_uid, InterpreterStatus(new_status).name
+        #))
 
-        if inter.program_id in self._own_programs:
-            self._own_programs[inter.program_id][inter.thread_id] = inter.status
-
-            if inter.status == InterpreterStatus.BLOCKED:
-                self.sanity_check(inter.program_id)
-
-            elif inter.status == InterpreterStatus.FINISHED:
-                # delete finished thread
-                self.logger.debug("{}.{} finished".format(inter.program_id, inter.thread_id))
-                del self._programs[inter.program_id][inter.thread_id]
-                if inter.program_id in self._own_programs:
-                    del self._own_programs[inter.program_id][inter.thread_id]
-                self.sanity_check(inter.program_id)
+        program_id, thread_id = thread_uid
+        if program_id in self._own_programs:
+            self._own_programs[program_id][thread_id] = new_status
         else:
-            self.logger.debug('Notify runtime: {}'.format(inter.runtime_id))
+            self.logger.debug('Notify runtime: {}'.format(runtime_id))
             self._comms.send_status_request(
-                inter.runtime_id,
-                (inter.program_id, inter.thread_id),
-                inter.status
+                runtime_id,
+                thread_uid,
+                new_status
             )
 
         # update inter status
-        #self._programs[inter.program_id][inter.thread_id].status = inter.status
+        self._programs[program_id][thread_id].status = new_status
+
+        if new_status == InterpreterStatus.FINISHED:
+            # delete finished thread
+            self.logger.debug("{}.{} finished".format(program_id, thread_id))
+            del self._programs[program_id][thread_id]
+
+            if program_id in self._own_programs:
+                del self._own_programs[program_id][thread_id]
+
+        if program_id in self._own_programs:
+            self.sanity_check(program_id)
+
 
     def add_thread(self, inter):
         thread_list = self._programs.setdefault(inter.program_id, dict())

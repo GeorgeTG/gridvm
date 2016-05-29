@@ -45,6 +45,7 @@ class SimpleScriptInterpreter(object):
         self.program_id = program_id
         self.thread_id = thread_id
         self.runtime_id = runtime_id
+        self.thread_uid = (program_id, thread_id)
         self.wake_up_at = 0.0
 
         self.__map = [
