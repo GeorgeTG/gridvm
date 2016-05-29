@@ -262,16 +262,17 @@ class Runtime(object):
         self.logger.info('Migrating ({}, {}) to {}'.format(program_id, thread_id, runtime_id))
 
         thread_package = self.pack_thread(program_id, thread_id)
-        self._comms.migrate_thread(
+        success = self._comms.migrate_thread(
             (program_id, thread_id),
             thread_package,
             runtime_id
         )
 
-        self.logger.info('Migration completed!')
-
-        # Remove thread from programs
-        del self._programs[program_id][thread_id]
+        if not success:
+            self.unpack_thread(thread_package)
+            self.logger.warning('Migration failed')
+        else:
+            self.logger.info('Migration completed!')
 
 
 class ThreadPackage(object):

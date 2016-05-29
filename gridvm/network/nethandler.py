@@ -91,6 +91,10 @@ class NetHandler:
                         PacketType(packet.type).name, *addr
                     ))
                     self.send_packet(packet, addr=addr)
+
+                    if packet.type == PacketType.MIGRATE_THREAD:
+                        self.comms.migrate_thread_completed(True)
+
                 else:
                     self.logger.debug('Sending packet "{}" over multicast'.format(
                         PacketType(packet.type).name
@@ -98,7 +102,7 @@ class NetHandler:
                     self.send_packet(packet)
 
             try:
-                self.logger.debug('Waiting for packets...')
+                #self.logger.debug('Waiting for packets...')
                 data = self.recv_packet([
                     PacketType.DISCOVER_REQ,        # Multicast
                     PacketType.DISCOVER_REP,        # Multicast
@@ -109,14 +113,14 @@ class NetHandler:
                     PacketType.RUNTIME_PRINT_REQ,   # Local
                     PacketType.MIGRATE_THREAD,
                     PacketType.MIGRATION_COMPLETED  # Multicast
-                ], timeout=10000)
+                ], timeout=100)
             except KeyboardInterrupt:
                 self.shutdown()
                 continue
 
             ##### DEBUGGING #######
             if not data:
-                self.print_runtimes()
+                #self.print_runtimes()
                 continue
 
             addr, packet = data
