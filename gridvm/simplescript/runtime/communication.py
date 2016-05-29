@@ -241,8 +241,6 @@ class NetworkCommunication:
         return self.nethandler.runtimes
 
     def shutdown(self):
-        # TODO: move all foreign threads to other runtimes
-
         self.nethandler.shutdown()
 
     def _get_list(self, queue):

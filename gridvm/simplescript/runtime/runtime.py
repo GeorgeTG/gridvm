@@ -104,6 +104,15 @@ class Runtime(object):
         self.running = False
         self._comms.shutdown()
 
+        # Send all foreign threads away
+        for program_id in self._programs:
+            if program_id in self._own_programs:
+                continue
+
+            for thread_id in self._programs[program_id]:
+                self.logger.info('Getting rid of {}:{}..'.format(program_id, thread_id))
+                self.request_migration(program_id, thread_id, None)
+
     def on_thread_fail(self, failed_inter):
         """ Called when a Thread fails """
         self.update_status(failed_inter.thread_uid, failed_inter.runtime_id, InterpreterStatus.CRASHED)
@@ -111,7 +120,7 @@ class Runtime(object):
         del self._programs[failed_inter.program_id]
 
         if failed_inter.program_id in self._own_programs:
-            del self._own_programsp[failed_inter.program_id]
+            del self._own_programs[failed_inter.program_id]
 
     def _get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
@@ -169,6 +178,8 @@ class Runtime(object):
                     raise
 
             list = self._get_next_round()
+
+        self._comms.nethandler.cleanup()
 
     def check_for_requests(self):
         # Check for status requests
