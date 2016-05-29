@@ -46,7 +46,9 @@ class SimpleScriptInterpreter(object):
         self.thread_id = thread_id
         self.runtime_id = runtime_id
         self.thread_uid = (program_id, thread_id)
+
         self.wake_up_at = 0.0
+        self.waiting_from = None
 
         self.__map = [
                 self._load_const,
@@ -83,10 +85,13 @@ class SimpleScriptInterpreter(object):
                 self._vars,
                 self._arrays,
                 self._stack,
-                self._status.value)
+                self._status.value,
+                self.wake_up_at,
+                self.waiting_from)
 
     def load_state(self, state):
-        (self._pc, self._vars, self._arrays, self._stack, status_code) = state
+        (self._pc,self._vars, self._arrays,
+                self._stack, status_code, self.wake_up_at, self.waiting_from) = state
         self._status = InterpreterStatus(status_code)
 
     def print_state(self):
