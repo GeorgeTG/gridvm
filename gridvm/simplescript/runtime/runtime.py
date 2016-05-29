@@ -149,7 +149,7 @@ class Runtime(object):
                     run_list.append(inter)
 
                 elif (status == InterpreterStatus.BLOCKED and
-                        self._comms.can_receive_message(inter.waiting_from) ):
+                        self._comms.can_receive_message(inter.waiting_from, inter.thread_uid) ):
                     self.update_status(inter.thread_uid, inter.runtime_id, InterpreterStatus.RUNNING)
                     run_list.append(inter)
 
@@ -191,18 +191,10 @@ class Runtime(object):
 
             list = self._get_next_round()
 
+        self.logger.info('Exiting...')
         self._comms.nethandler.cleanup()
 
     def check_for_requests(self):
-        # Check for status requests
-        for update in self._comms.get_status_requests():
-            ( (program_id, thread_id), status ) = update
-            self._own_programs[program_id][thread_id] = status
-
-        # Check for print requests
-        for thread_uid, msg in self._comms.get_print_requests():
-            self.logger.info('[{}:{}]: {}'.format(*thread_uid, msg))
-
         # Check for migrations sent over the network
         for thread_blob in self._comms.get_migrated_threads():
             self.unpack_thread(thread_blob)
@@ -211,8 +203,18 @@ class Runtime(object):
         try:
             while True:
                 self.migrate_thread( *self._migration_req.get(block=False) )
+                time.sleep(1)
         except Empty:
             pass
+
+        # Check for status requests
+        for update in self._comms.get_status_requests():
+            ( (program_id, thread_id), status ) = update
+            self._own_programs[program_id][thread_id] = status
+
+        # Check for print requests
+        for thread_uid, msg in self._comms.get_print_requests():
+            self.logger.info('[{}:{}]: {}'.format(*thread_uid, msg))
 
 
     def sanity_check(self, program_id):
@@ -339,7 +341,7 @@ if __name__ == '__main__':
         print('No program has been given..')
         sys.exit(1)
 
-    runtime = Runtime('eno1')
+    runtime = Runtime('wlan0')
     for i in range(len(sys.argv) - 1):
         runtime.load_program(sys.argv[i+1])
 

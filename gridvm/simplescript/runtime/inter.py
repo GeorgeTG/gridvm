@@ -117,7 +117,6 @@ class SimpleScriptInterpreter(object):
     def exec_next(self):
             try:
                 instruction = self.code.instructions[self._pc]
-                #print(instruction)
             except IndexError:
                 raise RuntimeError("Program finished without calling RET!")
 
@@ -202,7 +201,7 @@ class SimpleScriptInterpreter(object):
 
     def _rcv(self, arg=None):
         who = self._stack.pop()
-        msg = self._comms.receive_message( (self.program_id, who) )
+        msg = self._comms.receive_message( (self.program_id, who), (self.program_id, self.thread_id) )
         if msg == None:
             # re-insert address in stack
             self._stack.append(who)
@@ -216,7 +215,7 @@ class SimpleScriptInterpreter(object):
     def _snd(self, arg=None):
         send_what = self._stack.pop()
         send_to = self._stack.pop()
-        self._comms.send_message( (self.program_id, send_to) , send_what)
+        self._comms.send_message( (self.program_id, send_to), (self.program_id, self.thread_id) , send_what)
 
     def _slp(self, arg):
         self.wake_up_at = time.time() + self._stack.pop()
