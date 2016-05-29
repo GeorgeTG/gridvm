@@ -24,11 +24,12 @@ class PacketType(IntEnum):
     MIGRATE_THREAD =      0b00100000 # thread_uid, thread
     MIGRATION_COMPLETED = 0b00100001 # thread_uid
 
-    ACK = 0b11111111
+    ACK   = 0b11111111
     RETRY = 0b11111110
+    NACK  = 0b11111100
 
     PRINT = 0b10000000
-    
+
     """
     DISCOVER_THREAD_REQ
     DISCOVER_THREAD_REP

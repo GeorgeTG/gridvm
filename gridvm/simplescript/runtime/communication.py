@@ -43,7 +43,11 @@ class NetworkCommunication:
         self._status_req = Queue()
         self._to_send = Queue() # Packets that should be send over network (runtime_id, packet)
 
+        self._migration_req = Queue()
         self._migrate_sem = Semaphore(value=0)
+        self._migrate_sucess = False
+
+
         self.nethandler = NetHandler(self, runtime_id, net_interface)
 
         # Start NetHandler
@@ -172,6 +176,10 @@ class NetworkCommunication:
 
 
 
+    def get_migration_threads(self):
+        """ Called from Runtime to get a list of newly migrated threads """
+        return self._get_list( self._migration_req )
+
     def migrate_thread(self, thread_package, new_location):
         """ Called from Runtime to migrate the thread
 
@@ -179,12 +187,42 @@ class NetworkCommunication:
             -- thread_package:  the thread package we want to migrate
             -- new_location:    runtime_id of the target runtime
         """
-        pass
+        if new_location == self.runtime_id:
+            return
 
+        # Send packet
+        packet = make_packet(
+            PacketType.MIGRATE_THREAD,
+            thread_uid=(thread_package.program_id, thread_package.thread_id),
+            payload=thread_package.pack()
+        )
+        self._to_send.put( (new_location, packet) )
 
-    def migrate_thread_completed(self):
+        # Wait for ACK
+        self._migrate_sem.aquire()
+
+        # Update thread location
+        if self._migrate_sucess:
+            self.update_thread_location(thread_uid, new_location)
+            return True
+
+        return False
+
+        # TODO: On return remove from threads
+
+    def migrate_thread_completed(self, result):
         """ Called from NetHandler to signal runtime that the migration is over """
-        pass
+        self._migrate_sucess = result
+
+        # Unblock runtime
+        self._migrate_sem.release()
+
+    def add_thread_migration(self, packet):
+        """ Called from NetHandler once a MIGRATE_THREAD packet has arrived """
+        thread_uid, thread_blob = packet['thread_uid'], packet.payload
+        self._migration_req.put(thread_blob)
+
+        self.update_thread_location(thread_uid, self.runtime_id)
 
 
     def update_thread_location(self, thread_uid, new_location):
