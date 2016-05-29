@@ -25,7 +25,8 @@ class Runtime(object):
         self._remote_programs = dict()
         self._own_programs = dict()
 
-        self._migration_req = Queue()
+        self._request_q = Queue()
+        self._request_rep = Queue()
 
         #self._comms = EchoCommunication(interface)
         self._comms = NetworkCommunication(self.id, interface)
@@ -207,13 +208,31 @@ class Runtime(object):
         for thread_blob in self._comms.get_migrated_threads():
             self.unpack_thread(thread_blob)
 
-        # Check for migrations requests from shell
+        # Check for requests from shell
         try:
             while True:
-                self.migrate_thread( *self._migration_req.get(block=False) )
+                req, arg = self._request_q.get(block=False)
+                if req == LocalRequest.MIGRATE:
+                    self.request_migration(*arg)
+                elif req == LocalRequest.LIST_PROGRAMS:
+                    self._request_rep.put( self.get_thread_names() )
         except Empty:
             pass
 
+    def get_local_result(self):
+        """ Called from  shell to get a command result, returns (item, message) """
+        return self._request_rep.get()
+
+    def get_thread_names(self):
+        """ Returns a tuple of (programs_list, threads_of_nth_program """
+        programs = list()
+        program_threads = list()
+        index = 0
+        for program, threads in self._programs.items():
+            programs.append(program)
+            program_threads.append( list(threads.keys()) )
+
+        return (programs, program_threads)
 
     def sanity_check(self, program_id):
         total_threads = 0
@@ -270,10 +289,13 @@ class Runtime(object):
         if program_id in self._own_programs:
             self.sanity_check(program_id)
 
+    def add_local_request(self, type, arg=None):
+        """ Called from the shell to serve a request """
+        self._request_q.put( (type, arg) )
 
     def request_migration(self, program_id, thread_id, runtime_id):
-        """ Called from shell """
-        self._migration_req.put((program_id, thread_id, runtime_id))
+        """ Called to request a migration, duh """
+        self._request_q.put( (LocalRequest.MIGRATE, (program_id, thread_id, runtime_id)) )
 
     def migrate_thread(self, program_id, thread_id, runtime_id):
         """ Start the migration process for thread_uid to runtime_id """
@@ -355,3 +377,14 @@ if __name__ == '__main__':
             runtime.request_migration( program_id, thread_id, runtime_id )
     except KeyboardInterrupt:
         runtime.shutdown()
+
+
+from enum import IntEnum, unique
+@unique
+class LocalRequest(IntEnum):
+    LIST_RUNTIMES = 0
+    LIST_PROGRAMS = 1
+    MIGRATE = 2
+    AUTO_BALANCE = 3
+    SHUTDOWN = 4
+
