@@ -44,7 +44,7 @@ class NetworkCommunication:
         self._to_send = Queue() # Packets that should be send over network (runtime_id, packet)
 
         self._migration_req = Queue()
-        self._migrate_sem = Semaphore(value=0)
+        self._sem = Semaphore(value=0)
         self._migrate_sucess = False
 
 
@@ -54,7 +54,7 @@ class NetworkCommunication:
         self.nethandler_thread = Thread(target=self.nethandler.start)
         self.nethandler_thread.start()
 
-    def receive_message(self, thread_uid):
+    def receive_message(self, sender, recv):
         """ Called from Runtime to receive a message destined for a thread
 
         Parameters:
@@ -62,7 +62,7 @@ class NetworkCommunication:
         """
 
         # Create queue if not exist
-        queue = self._messages.setdefault(thread_uid, Queue())
+        queue = self._messages.setdefault( (recv, sender), Queue())
 
         try:
             return queue.get(block=False)
@@ -78,61 +78,71 @@ class NetworkCommunication:
         Returns:
             -- List of messages, or an empty list if no messages in buffer
         """
-        messages = list()
+        messages = { }
 
-        message = self.receive_message(thread_uid)
-        while message:
-            messages.append(message)
-            message = self.receive_message(thread_uid)
+        for (recv, sender) in self._messages:
+            if recv == thread_uid:
+                messages[(recv, sender)] = [ ]
 
+                while True:
+                    msg = self.receive_message(sender, recv)
+                    if msg == None:
+                        break
+                    messages[(recv, sender)].append(msg)
+
+                if not messages[(recv, sender)]:
+                    del messages[(recv, sender)]
+
+        print(messages)
         return messages
 
 
-    def can_receive_message(self, thread_uid):
+    def can_receive_message(self, sender, recv):
         """ Called from Runtime to check if a message is pending for a thread
 
         Parameters:
             -- thread_uid: (program_id, thread_id)
         """
-        queue = self._messages.setdefault(thread_uid, Queue())
+        queue = self._messages.setdefault( (recv, sender), Queue())
         return not queue.empty()
 
-    def send_message(self, thread_uid, msg):
+    def send_message(self, recv, sender, msg):
         """ Called from Runtime to send a message to another thread (same program)
 
             Parameters:
                 -- thread_uid:  (program_id, thread_id)
                 -- msg:         message to send
         """
-        runtime_id = self._get_runtime_id(thread_uid)
+        runtime_id = self._get_runtime_id(recv)
 
         if runtime_id == self.runtime_id:
             # Simply add to local message queue
-            queue = self._messages.setdefault(thread_uid, Queue())
+            queue = self._messages.setdefault((recv, sender), Queue())
             queue.put(msg)
         else:
             packet = make_packet(
                 PacketType.THREAD_MESSAGE,
-                thread_uid=thread_uid,
+                recv=recv,
+                sender=sender,
                 msg=msg
             )
             self._to_send.put( (runtime_id, packet) )
 
     def add_thread_message(self, packet):
         """ Called from NetHandler to add a new thread message which has arrived """
-        thread_uid, msg = packet['thread_uid'], packet['msg']
+        sender, recv, msg = packet['sender'], packet['recv'], packet['msg']
 
         # Add the message to the queue
-        queue = self._messages.setdefault(thread_uid, Queue())
+        queue = self._messages.setdefault( (recv, sender), Queue())
         queue.put(msg)
 
     def restore_messages(self, thread_uid, messages):
         """ Called from runtime to restore pending messages """
-        # ensure queue exists
-        queue = self._messages.setdefault(thread_uid, Queue())
+        for (recv, sender) in messages:
+            queue = self._messages.setdefault( (recv, sender), Queue())
+            for msg in messages[(recv, sender)]:
+                queue.put(msg)
 
-        for message in messages:
-            queue.put(message)
 
     def get_print_requests(self):
         """ Called from Runtime to get a list of print requests for its own threads
@@ -224,7 +234,7 @@ class NetworkCommunication:
         self._to_send.put( (new_location, packet) )
 
         # Wait for ACK
-        self._migrate_sem.acquire()
+        self._sem.acquire()
 
         # Update thread location
         if self._migrate_sucess:
@@ -238,7 +248,7 @@ class NetworkCommunication:
         self._migrate_sucess = result
 
         # Unblock runtime
-        self._migrate_sem.release()
+        self._sem.release()
 
     def add_thread_migration(self, packet):
         """ Called from NetHandler once a MIGRATE_THREAD packet has arrived """
@@ -282,8 +292,13 @@ class NetworkCommunication:
     def _get_runtime_id(self, thread_uid):
         """ Return the id of the runtime that currently runs this thread """
         if thread_uid not in self._fwd_table:
-            # TODO: Broadcast message to discover the location of the thread
-            raise RuntimeError('ERROR: {} not in fwd table..'.format(thread_uid))
-            return None
+            packet = make_packet(
+                PacketType.DISCOVER_THREAD_REQ,
+                thread_uid=thread_uid
+            )
+            self._to_send.put( (None, packet) )
+
+            # Wait for DISCOVER_THREAD_REP
+            self._sem.acquire()
 
         return self._fwd_table[thread_uid]
