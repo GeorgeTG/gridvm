@@ -74,10 +74,17 @@ class Runtime(object):
                 (thread_info.program_id, thread_info.thread_id),
                 self.id )
 
+
     def pack_thread(self, program_id, thread_id):
         """ Pack a thread with it's state and code, into a transferable blob"""
+        # remove the interpreter from the threads' tree
         inter = self._programs[program_id].pop(thread_id)
-        return ThreadPackage.from_inter(inter).pack()
+
+        # get all messages for this thread from comms
+        messages = self._comms.receive_all_messages( (inter.program_id, inter.thread_id) )
+        self.logger.debug('Packed {} pending messages'.format(len(messages)))
+
+        return ThreadPackage.from_inter(inter, messages).pack()
 
     def unpack_thread(self, blob):
         """ Create a thread from a package """
@@ -92,8 +99,13 @@ class Runtime(object):
                 communication=self._comms
         )
 
+        self.logger.debug('Restored {} pending messages'.format(len(package.pending_msgs)))
+        # restore pending messages
+        self._comms.restore_messages( (package.program_id, package.thread_id), package.pending_msgs)
+
         # load stack, memory etc
         interpreter.load_state(package.state)
+
 
         # add thread to programs
         program_node = self._programs.setdefault(package.program_id, dict())
@@ -285,27 +297,30 @@ class ThreadPackage(object):
     """ This class represents a thead package.
     Thread packages are used as containers to transfer thread state
     and code to another runtime """
-    def __init__(self, runtime_id, program_id, thread_id, code, state):
+    def __init__(self, runtime_id, program_id, thread_id, code, state, messages=[]):
         self.program_id = program_id
         self.thread_id = thread_id
         self.runtime_id = runtime_id
         self.code = code
         self.state = state
+        self.pending_msgs = messages
 
     @classmethod
-    def from_inter(cls, inter):
+    def from_inter(cls, inter, messages):
         """ Create a ThreadPackage from a ThreadContex """
         return cls(
                 inter.runtime_id,
                 inter.program_id,
                 inter.thread_id,
                 inter.code,
-                inter.save_state()
+                inter.save_state(),
+                messages
                 )
 
     def pack(self):
         """ Pack into network-friendly transferable binary blob """
-        package = (self.runtime_id, self.program_id, self.thread_id, self.code, self.state)
+        package = (self.runtime_id, self.program_id,
+                self.thread_id, self.code, self.state, self.pending_msgs)
         dump = pickle.dumps(package, pickle.HIGHEST_PROTOCOL)
         return lzma.compress(dump)
 
