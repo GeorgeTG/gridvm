@@ -45,6 +45,7 @@ class SimpleScriptInterpreter(object):
         self.program_id = program_id
         self.thread_id = thread_id
         self.runtime_id = runtime_id
+        self.wake_up_at = 0.0
 
         self.__map = [
                 self._load_const,
@@ -166,7 +167,13 @@ class SimpleScriptInterpreter(object):
             vect.append(self._stack.pop())
 
         format = self.code.co_consts[self._stack.pop()]
-        print(format, ', '.join(str(arg) for arg in reversed(vect)))
+        to_print = format +  ', '.join(str(arg) for arg in reversed(vect))
+
+        self._comms.send_print_request(
+            self.runtime_id,
+            (self.program_id, self.thread_id),
+            to_print
+        )
 
     def _arithm(self, arg):
         var2 = self._stack.pop()
