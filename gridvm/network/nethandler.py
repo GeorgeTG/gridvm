@@ -106,6 +106,8 @@ class NetHandler:
                 data = self.recv_packet([
                     PacketType.DISCOVER_REQ,        # Multicast
                     PacketType.DISCOVER_REP,        # Multicast
+                    PacketType.DISCOVER_THREAD_REQ, # Multicast
+                    PacketType.DISCOVER_THREAD_REP, # Local
                     PacketType.SHUTDOWN_REQ,        # Multicast
                     PacketType.SHUTDOWN_ACK,        # Local
                     PacketType.THREAD_MESSAGE,      # Local
@@ -155,6 +157,31 @@ class NetHandler:
                 # Save runtime data & listen for this runtime requests
                 self.runtimes[runtime_id] = (ip, port)
                 self.logger.info('Found peer @ {}:{}'.format(ip, port))
+
+            elif packet.type == PacketType.DISCOVER_THREAD_REQ:
+                # Check if I am responsible for this thread
+                thread_uid = packet['thread_uid']
+                if thread_uid in self.comms._fwd_table:
+                    pkt = make_packet(
+                        PacketType.DISCOVER_THREAD_REP,
+                        ip=self.ip,
+                        port=self.port,
+                        runtime_id=self.runtime_id,
+                        thread_uid=thread_uid,
+                        location=self.comms._fwd_table[thread_uid]
+                    )
+                    self.send_packet(pkt, addr=(ip, port))
+
+            elif packet.type == PacketType.DISCOVER_THREAD_REP:
+                thread_uid, location = packet['thread_uid'], packet['location']
+
+                self.comms.update_thread_location(thread_uid, location)
+
+                # Send ACK to sender
+                self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
+                self.send_reply(addr, PacketType.ACK)
+
+                self.comms._sem.release()
 
             elif packet.type == PacketType.SHUTDOWN_REQ:
                 # Remove runtime entry

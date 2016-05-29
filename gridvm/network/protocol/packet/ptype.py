@@ -14,6 +14,9 @@ class PacketType(IntEnum):
     DISCOVER_REQ = 0b00000010
     DISCOVER_REP = 0b00000011
 
+    DISCOVER_THREAD_REQ = 0b00000110
+    DISCOVER_THREAD_REP = 0b00000111
+
     SHUTDOWN_REQ = 0b00000100
     SHUTDOWN_ACK = 0b00000101
 
@@ -31,9 +34,7 @@ class PacketType(IntEnum):
     PRINT = 0b10000000
 
     """
-    DISCOVER_THREAD_REQ
-    DISCOVER_THREAD_REP
-    """
+        """
 
     def reply_type(self):
         if self.value & 1 > 0:
