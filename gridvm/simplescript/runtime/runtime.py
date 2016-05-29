@@ -101,7 +101,7 @@ class Runtime(object):
 
         self.logger.debug('Restored {} pending messages'.format(len(package.pending_msgs)))
         # restore pending messages
-        self._comms.restore_messages(package.pending_msgs)
+        self._comms.restore_messages( (package.program_id, package.thread_id), package.pending_msgs)
 
         # load stack, memory etc
         interpreter.load_state(package.state)
