@@ -49,12 +49,12 @@ class Runtime(object):
         code = generic_load(thread_info.source_file)
 
         interpreter = SimpleScriptInterpreter(
-                runtime_id = self.id,
-                program_id = thread_info.program_id,
-                thread_id = thread_info.thread_id,
-                code = code,
-                communication = self._comms)
-
+                runtime_id=self.id,
+                program_id=thread_info.program_id,
+                thread_id=thread_info.thread_id,
+                code=code,
+                communication=self._comms
+        )
 
         # initialise the interpreter with argv
         interpreter.start(thread_info.args)
@@ -83,11 +83,12 @@ class Runtime(object):
         package = ThreadPackage.unpack(blob)
 
         interpreter = SimpleScriptInterpreter(
-                thread_id = package.thread_id,
-                program_id = package.program_id,
-                runtime_id = package.runtime_id,
+                thread_id=package.thread_id,
+                program_id=package.program_id,
+                runtime_id=package.runtime_id,
                 code=package.code,
-                communication=self._comms)
+                communication=self._comms
+        )
 
         # load stack, memory etc
         interpreter.load_state(package.state)
@@ -96,13 +97,6 @@ class Runtime(object):
         program_node = self._programs.setdefault(package.program_id, dict())
         program_node[package.thread_id] = interpreter
 
-        # let comms know we have a new thread
-        """
-        self._comms.update_thread_location(
-                (package.program_id, package.thread_id),
-                package.runtime_id
-        )
-        """
 
     def shutdown(self):
         self._comms.shutdown()
@@ -119,6 +113,7 @@ class Runtime(object):
 
     def _get_next_round(self):
         """ Generate a run list and yield threads in a round-robin fashion """
+        self.check_for_requests()
 
         run_list = [ ]
         while not run_list:
@@ -139,14 +134,12 @@ class Runtime(object):
 
             if not run_list:
                 self.logger.debug('Sleeping for 100ms ...')
-                time.sleep(0.1)
+                time.sleep(1)
+                self.check_for_requests()
 
         return run_list
 
     def run(self):
-        changes = self._comms.get_status_requests()
-        self.update_remote_threads(changes)
-
         # if we get an empty list, either everyone is blocked, or they are all finished
         list = self._get_next_round()
         while list:
@@ -174,18 +167,29 @@ class Runtime(object):
                     self.shutdown()
                     raise
 
-            # Check for migrations requests from shell
-            try:
-                while True:
-                    self.migrate_thread( *self._migration_req.get(block=False) )
-            except Empty:
-                pass
-
-            # Check for migrations sent over the network
-            for thread_blob in self._comms.get_migrated_threads():
-                self.unpack_thread(thread_blob)
-
             list = self._get_next_round()
+
+    def check_for_requests(self):
+        # Check for status requests
+        for update in self._comms.get_status_requests():
+            ( (program_id, thread_id), status ) = update
+            self._own_programs[program_id][thread_id] = status
+
+        # Check for print requests
+        for thread_uid, msg in self._comms.get_print_requests():
+            self.logger.info('[{}:{}]: {}'.format(*thread_uid, msg))
+
+        # Check for migrations sent over the network
+        for thread_blob in self._comms.get_migrated_threads():
+            self.unpack_thread(thread_blob)
+
+        # Check for migrations requests from shell
+        try:
+            while True:
+                self.migrate_thread( *self._migration_req.get(block=False) )
+        except Empty:
+            pass
+
 
     def sanity_check(self, program_id):
         total_threads = 0
@@ -212,10 +216,17 @@ class Runtime(object):
     def update_status(self, inter):
         """ Update status, if this is not our thread notify
         the responsible runtime for its thread's status """
+
+        self.logger.debug('State of {}:{} is now: "{}"'.format(
+            inter.program_id, inter.thread_id, InterpreterStatus(inter.status).name
+        ))
+
         if inter.program_id in self._own_programs:
             self._own_programs[inter.program_id][inter.thread_id] = inter.status
+
             if inter.status == InterpreterStatus.BLOCKED:
                 self.sanity_check(inter.program_id)
+
             elif inter.status == InterpreterStatus.FINISHED:
                 # delete finished thread
                 self.logger.debug("{}.{} finished".format(inter.program_id, inter.thread_id))
@@ -223,6 +234,13 @@ class Runtime(object):
                 if inter.program_id in self._own_programs:
                     del self._own_programs[inter.program_id][inter.thread_id]
                 self.sanity_check(inter.program_id)
+        else:
+            self.logger.debug('Notify runtime: {}'.format(inter.runtime_id))
+            self._comms.send_status_request(
+                inter.runtime_id,
+                (inter.program_id, inter.thread_id),
+                inter.status
+            )
 
         # update inter status
         #self._programs[inter.program_id][inter.thread_id].status = inter.status
@@ -234,16 +252,6 @@ class Runtime(object):
         if inter.runtime_id == self.id:
             program_node = self._own_programs.setdefault(inter.program_id, dict())
             program_node[inter.thread_id] = inter.status
-
-    def update_remote_threads(self, statuses):
-        """ Check for status changes for OUR threads from remote runtimes """
-        for update in statuses:
-            ( (program_id, thread_id), status ) = update
-            self._own_programs[program_id][thread_id] = status
-            if status == InterpreterStatus.BLOCKED:
-                self.check_for_deadlocks(program_id)
-            elif status == InterpreterStatus.FINISHED:
-                self.check_if_finished(program_id)
 
     def request_migration(self, program_id, thread_id, runtime_id):
         """ Called from shell """
@@ -318,7 +326,6 @@ if __name__ == '__main__':
     runtime_thread.start()
 
     try:
-        while True:
             program_id = input()
             thread_id = int(input())
             runtime_id = input()
