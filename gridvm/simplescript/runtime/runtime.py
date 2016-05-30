@@ -75,9 +75,9 @@ class Runtime(object):
         program_node = self._programs.setdefault(thread_info.program_id, dict())
         program_node[thread_info.thread_id] = interpreter
 
-        # add to own programs(status only)
+        # add to own programs(status + waiting from only)
         program_node = self._own_programs.setdefault(thread_info.program_id, dict())
-        program_node[thread_info.thread_id] = interpreter.status
+        program_node[thread_info.thread_id] = (interpreter.status, None)
 
         # let comms know we have a new thread
         self._comms.update_thread_location(
@@ -188,7 +188,16 @@ class Runtime(object):
                             (sc.program_id, sc.thread_id),
                             sc.status)
                     """
-                    self.update_status(inter.thread_uid, sc.runtime_id, sc.status)
+                    if sc.status == InterpreterStatus.BLOCKED:
+                        self.update_status(
+                            inter.thread_uid,
+                            sc.runtime_id,
+                            sc.status,
+                            waiting_from=inter.waiting_from
+                        )
+                    else:
+                        self.update_status(inter.thread_uid, sc.runtime_id, sc.status)
+
 
                 except Exception as ex:
                     self.logger.error('Thread failed')
@@ -211,8 +220,8 @@ class Runtime(object):
 
         # Check for status requests
         for update in self._comms.get_status_requests():
-            ( (program_id, thread_id), status ) = update
-            self._own_programs[program_id][thread_id] = status
+            ( (program_id, thread_id), (status, waiting_from) ) = update
+            self._own_programs[program_id][thread_id] = (status, waiting_from)
 
         # Check for print requests
         for thread_uid, msg in self._comms.get_print_requests():
@@ -254,18 +263,17 @@ class Runtime(object):
         total_threads = 0
         finished_threads = 0
         blocked_threads = 0
-        for status in self._own_programs[program_id].values():
+        for thread_id, (status, waiting_from) in self._own_programs[program_id].items():
+            #print('{}: ({}, {})'.format(thread_id, status, waiting_from))
+
             if status == InterpreterStatus.FINISHED:
                 finished_threads += 1
-            elif status == InterpreterStatus.BLOCKED:
+            elif (status == InterpreterStatus.BLOCKED and
+                    not self._comms.can_receive_message(waiting_from, (program_id, thread_id)) ):
                 blocked_threads += 1
 
             total_threads += 1
 
-        # Check if some of the threads, that run locally can recv a message
-        for inter in self._programs[program_id].values():
-            if self._comms.can_receive_message(inter.waiting_from, inter.thread_uid):
-                blocked_threads -= 1
 
         if finished_threads == total_threads:
             self.logger.info('Program {} finished.'.format(program_id))
@@ -277,7 +285,7 @@ class Runtime(object):
         elif blocked_threads == total_threads:
             self.logger.error('Program {} is in a DEADLOCK'.format(program_id))
 
-    def update_status(self, thread_uid, runtime_id, new_status):
+    def update_status(self, thread_uid, runtime_id, new_status, waiting_from=None):
         """ Update status, if this is not our thread notify
         the responsible runtime for its thread's status """
 
@@ -287,13 +295,14 @@ class Runtime(object):
 
         program_id, thread_id = thread_uid
         if program_id in self._own_programs:
-            self._own_programs[program_id][thread_id] = new_status
+            self._own_programs[program_id][thread_id] = (new_status, waiting_from)
         else:
             self.logger.debug('Notify runtime: {}'.format(runtime_id))
             self._comms.send_status_request(
                 runtime_id,
                 thread_uid,
-                new_status
+                new_status,
+                waiting_from=waiting_from
             )
 
         # update inter status

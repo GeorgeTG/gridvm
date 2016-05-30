@@ -333,8 +333,6 @@ class NetHandler:
         self.rep_sock.close()
         self.context.term()
 
-        # TODO: Signal runtime to close
-
     def print_runtimes(self):
         to_print = '\n' + 10 * '=' + ' RUNTIMES ' + 10 * '=' + '\n'
         for i, (runtime_id, (ip, port)) in enumerate(sorted(self.runtimes.items())):

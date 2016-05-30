@@ -37,6 +37,7 @@ class NetworkCommunication:
     def __init__(self, runtime_id, net_interface):
         self.runtime_id = runtime_id
         self._messages = { }    # Messages that have arrived for threads
+        self._sent_messages = [ ] # Messages that have been sent over the network
         self._fwd_table = { }   # Forwarding table <pid, tid> -> <runtime_id>
 
         self._print_req = Queue()
@@ -93,7 +94,6 @@ class NetworkCommunication:
                 if not messages[(recv, sender)]:
                     del messages[(recv, sender)]
 
-        print(messages)
         return messages
 
 
@@ -104,7 +104,16 @@ class NetworkCommunication:
             -- thread_uid: (program_id, thread_id)
         """
         queue = self._messages.setdefault( (recv, sender), Queue())
-        return not queue.empty()
+        if not queue.empty():
+            return True
+
+        # Check if a message was sent over the network
+        if (recv, sender) in self._sent_messages:
+            print('Found sent message')
+            self._sent_messages.remove( (recv, sender) )
+            return True
+
+        return False
 
     def send_message(self, recv, sender, msg):
         """ Called from Runtime to send a message to another thread (same program)
@@ -127,6 +136,10 @@ class NetworkCommunication:
                 msg=msg
             )
             self._to_send.put( (runtime_id, packet) )
+
+            # Add to sent_messages
+            print('Add {}:{}'.format(recv, sender))
+            self._sent_messages.append( (recv, sender) )
 
     def add_thread_message(self, packet):
         """ Called from NetHandler to add a new thread message which has arrived """
@@ -184,7 +197,7 @@ class NetworkCommunication:
         """
         return self._get_list( self._status_req )
 
-    def send_status_request(self, orig_runtime_id, thread_uid, new_status):
+    def send_status_request(self, orig_runtime_id, thread_uid, new_status, waiting_from=None):
         """ Called from Runtime to notify the thread's responsible
             runtime, for a thread status change
 
@@ -195,19 +208,20 @@ class NetworkCommunication:
         """
 
         if orig_runtime_id == self.runtime_id:
-            self._status_req.put( (thread_uid, new_status) )
+            self._status_req.put( (thread_uid, (new_status, waiting_from)) )
         else:
             packet = make_packet(
                 PacketType.RUNTIME_STATUS_REQ,
                 thread_uid=thread_uid,
-                status=new_status
+                status=new_status,
+                waiting_from=waiting_from
             )
             self._to_send.put( (orig_runtime_id, packet) )
 
     def add_status_request(self, packet):
         """ Called from NetHandler to add a thread status request which has arrived """
-        thread_uid, status = packet['thread_uid'], packet['status']
-        self._status_req.put( (thread_uid, status) )
+        thread_uid, status, waiting_from = packet['thread_uid'], packet['status'], packet['waiting_from']
+        self._status_req.put( (thread_uid, (status, waiting_from)) )
 
 
 
