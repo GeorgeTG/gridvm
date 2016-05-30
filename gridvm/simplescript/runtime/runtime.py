@@ -257,10 +257,15 @@ class Runtime(object):
         for status in self._own_programs[program_id].values():
             if status == InterpreterStatus.FINISHED:
                 finished_threads += 1
-            elif status == InterpreterStatus.BLOCKED: # MAYBE AND CANNOT RECV??
+            elif status == InterpreterStatus.BLOCKED:
                 blocked_threads += 1
 
             total_threads += 1
+
+        # Check if some of the threads, that run locally can recv a message
+        for inter in self._programs[program_id].values():
+            if self._comms.can_receive_message(inter.waiting_from, inter.thread_uid):
+                blocked_threads -= 1
 
         if finished_threads == total_threads:
             self.logger.info('Program {} finished.'.format(program_id))
