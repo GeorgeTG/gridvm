@@ -4,6 +4,7 @@ import time
 import itertools
 
 from datetime import datetime
+from enum import IntEnum, unique
 from queue import Queue, Empty
 
 from gridvm.logger import get_logger
@@ -12,6 +13,14 @@ from .inter import SimpleScriptInterpreter, InterpreterStatus
 from .source import ProgramInfo, generic_load
 from .utils import fast_hash
 from ..ss_exception import StatusChange
+
+@unique
+class LocalRequest(IntEnum):
+    LIST_RUNTIMES = 0
+    LIST_PROGRAMS = 1
+    MIGRATE = 2
+    AUTO_BALANCE = 3
+    SHUTDOWN = 4
 
 class Runtime(object):
     def __init__(self, interface, bind_addres=None, mcast_address=None):
@@ -124,7 +133,7 @@ class Runtime(object):
 
             for thread_id in self._programs[program_id]:
                 self.logger.info('Getting rid of {}:{}..'.format(program_id, thread_id))
-                self.request_migration(program_id, thread_id, None)
+                self.add_local_request( LocalRequest.MIGRATE, (program_id, thread_id, None))
 
     def on_thread_fail(self, failed_inter):
         """ Called when a Thread fails """
@@ -300,10 +309,6 @@ class Runtime(object):
         """ Called from the shell to serve a request """
         self._request_q.put( (type, arg) )
 
-    def request_migration(self, program_id, thread_id, runtime_id):
-        """ Called to request a migration, duh """
-        self._request_q.put( (LocalRequest.MIGRATE, (program_id, thread_id, runtime_id)) )
-
     def migrate_thread(self, program_id, thread_id, runtime_id):
         """ Start the migration process for thread_uid to runtime_id """
 
@@ -381,16 +386,6 @@ if __name__ == '__main__':
             thread_id = int(input())
             runtime_id = input()
 
-            runtime.request_migration( program_id, thread_id, runtime_id )
+            runtime.add_local_request( LocalRequest.MIGRATE, (program_id, thread_id, runtime_id) )
     except KeyboardInterrupt:
         runtime.shutdown()
-
-
-from enum import IntEnum, unique
-@unique
-class LocalRequest(IntEnum):
-    LIST_RUNTIMES = 0
-    LIST_PROGRAMS = 1
-    MIGRATE = 2
-    AUTO_BALANCE = 3
-    SHUTDOWN = 4

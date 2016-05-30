@@ -101,6 +101,7 @@ class NetHandler:
                     ))
                     self.send_packet(packet)
 
+
             try:
                 #self.logger.debug('Waiting for packets...')
                 data = self.recv_packet([
@@ -224,7 +225,11 @@ class NetHandler:
                     break
 
             elif packet.type == PacketType.THREAD_MESSAGE:
-                # TODO: check if thread belongs to me and send RETRY
+                # Check if this thread does not belong to this runtime
+                if (packet['recv'] not in self.comms._fwd_table or
+                    self.comms._fwd_table[ packet['recv'] ] != self.runtime_id):
+                        self.logger.debug('Replying RETRY @ {}:{}'.format(ip, port))
+                        self.send_reply(addr, PacketType.RETRY)
 
                 # Signal that a new thread message has arrived
                 self.comms.add_thread_message(packet)
@@ -354,8 +359,7 @@ class NetHandler:
 
             # Check reply packet
             if rep_packet.type == PacketType.RETRY:
-                # TODO: add to send queue again
-                pass
+                self.comms._to_send.put(packet)
 
             return rep_packet.type
         else: # Multicast PUB shall be used
