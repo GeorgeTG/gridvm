@@ -260,20 +260,22 @@ class Runtime(object):
         return (programs, program_threads)
 
     def sanity_check(self, program_id):
-        total_threads = 0
-        finished_threads = 0
+        total_threads = len(self._own_programs[program_id])
+        finished_threads = sum( status == InterpreterStatus.FINISHED
+                                for status, _ in self._own_programs[program_id].values() )
         blocked_threads = 0
+        local_threads = 0
         for thread_id, (status, waiting_from) in self._own_programs[program_id].items():
             #print('{}: ({}, {})'.format(thread_id, status, waiting_from))
+            if thread_id not in self._programs[program_id]:
+                continue
 
-            if status == InterpreterStatus.FINISHED:
-                finished_threads += 1
-            elif (status == InterpreterStatus.BLOCKED and
+            # Only local programs
+            if (status == InterpreterStatus.BLOCKED and
                     not self._comms.can_receive_message(waiting_from, (program_id, thread_id)) ):
                 blocked_threads += 1
 
-            total_threads += 1
-
+            local_threads += 1
 
         if finished_threads == total_threads:
             self.logger.info('Program {} finished.'.format(program_id))
@@ -282,7 +284,19 @@ class Runtime(object):
             if program_id in self._own_programs:
                 del self._own_programs[program_id]
 
-        elif blocked_threads == total_threads:
+        elif blocked_threads == local_threads:
+            #print( self._own_programs[program_id] )
+
+            for thread_id, (status, waiting_from) in self._own_programs[program_id].items():
+                if thread_id in self._programs[program_id]:
+                    continue
+
+                # Only migrated programs
+                if status != InterpreterStatus.BLOCKED:
+                    return
+                elif self._comms.can_receive_message(waiting_from, (program_id, thread_id)):
+                    return
+
             self.logger.error('Program {} is in a DEADLOCK'.format(program_id))
 
     def update_status(self, thread_uid, runtime_id, new_status, waiting_from=None):

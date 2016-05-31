@@ -82,11 +82,13 @@ class NetworkCommunication:
         messages = { }
 
         for (recv, sender) in self._messages:
+            #print( (recv, sender) , self._messages[(recv, sender)].empty() )
             if recv == thread_uid:
                 messages[(recv, sender)] = [ ]
 
                 while True:
                     msg = self.receive_message(sender, recv)
+                    #print(msg)
                     if msg == None:
                         break
                     messages[(recv, sender)].append(msg)
@@ -109,7 +111,7 @@ class NetworkCommunication:
 
         # Check if a message was sent over the network
         if (recv, sender) in self._sent_messages:
-            print('Found sent message')
+            #print('Found sent message: {} -> {}'.format(sender, recv))
             self._sent_messages.remove( (recv, sender) )
             return True
 
@@ -138,7 +140,7 @@ class NetworkCommunication:
             self._to_send.put( (runtime_id, packet) )
 
             # Add to sent_messages
-            print('Add {}:{}'.format(recv, sender))
+            #print('Add {}:{}'.format(recv, sender))
             self._sent_messages.append( (recv, sender) )
 
     def add_thread_message(self, packet):
@@ -151,6 +153,7 @@ class NetworkCommunication:
 
     def restore_messages(self, thread_uid, messages):
         """ Called from runtime to restore pending messages """
+        #print(messages)
         for (recv, sender) in messages:
             queue = self._messages.setdefault( (recv, sender), Queue())
             for msg in messages[(recv, sender)]:
