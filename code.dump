@@ -1,0 +1,388 @@
+Constants:
+    0 A
+    1 0
+    2 AbBbCcDdEeFfGgHhIiJjKkLlMmNnOoPpQqRrSsTtUuVvXxYyZz1234567890!@#$%^&*()+-=/?><:;
+    3 2
+    4 1
+    5 3
+    6 val_a 
+    7 6
+    8 val_a & val_b 
+    9 8
+    10 val_a & val_b & val_c 
+    11 10
+    12 argv[0] & argc 
+    13 12
+    14 FAILURE TEST 
+    15 14
+    16 4
+    17 100
+    18 SUCCESS
+    19 18
+Vars:
+    0 $argc
+    1 $val_a
+    2 $val_b
+    3 $val_c
+    4 $testcnt
+    5 $res
+    6 $rcv_res
+    7 $i
+Arrays:
+    0 $argv
+    1 $array
+Code
+
+3:   [ 0]LOAD_CONST    1
+     [15]PRN           0
+
+4:   [ 0]LOAD_CONST    3
+     [15]PRN           0
+
+5:   [ 0]LOAD_CONST    4
+     [ 5]BUILD_VAR     1
+     [ 2]STORE_VAR     1
+
+6:   [ 0]LOAD_CONST    3
+     [ 5]BUILD_VAR     2
+     [ 2]STORE_VAR     2
+
+7:   [ 0]LOAD_CONST    5
+     [ 5]BUILD_VAR     3
+     [ 2]STORE_VAR     3
+
+8:   [ 0]LOAD_CONST    7
+     [ 1]LOAD_VAR      1
+     [15]PRN           1
+
+9:   [ 0]LOAD_CONST    9
+     [ 1]LOAD_VAR      1
+     [ 1]LOAD_VAR      2
+     [15]PRN           2
+
+11:  [ 0]LOAD_CONST    11
+     [ 1]LOAD_VAR      1
+     [ 1]LOAD_VAR      2
+     [ 1]LOAD_VAR      3
+     [15]PRN           3
+
+13:  [ 0]LOAD_CONST    13
+     [ 0]LOAD_CONST    1
+     [ 3]LOAD_ARRAY    0
+     [ 1]LOAD_VAR      0
+     [15]PRN           2
+
+15:  [ 0]LOAD_CONST    1
+     [ 5]BUILD_VAR     4
+     [ 2]STORE_VAR     4
+
+16:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+17:  [ 0]LOAD_CONST    4
+     [ 5]BUILD_VAR     5
+     [ 2]STORE_VAR     5
+
+18:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    1
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   0
+
+20:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+21:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+22:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+23:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    1
+     [10]JMP_IF_TRUE   1
+
+25:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+26:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+27:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+28:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    3
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   2
+
+30:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+31:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+32:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+33:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    3
+     [10]JMP_IF_TRUE   3
+
+35:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+36:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+37:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+38:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    4
+     [10]JMP_IF_TRUE   4
+
+40:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+41:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+42:  [11]JMP           5
+
+44:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
+
+45:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+46:  [ 0]LOAD_CONST    1
+     [ 2]STORE_VAR     5
+
+47:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     5
+
+48:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   0
+
+50:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   0
+
+51:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+52:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+53:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        1
+     [ 2]STORE_VAR     5
+
+54:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    1
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+56:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    1
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+57:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+58:  [ 0]LOAD_CONST    3
+     [ 2]STORE_VAR     5
+
+59:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    3
+     [ 8]ARITHM        2
+     [ 2]STORE_VAR     5
+
+60:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    16
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+63:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    16
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+64:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+65:  [ 0]LOAD_CONST    16
+     [ 2]STORE_VAR     5
+
+66:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    3
+     [ 8]ARITHM        3
+     [ 2]STORE_VAR     5
+
+67:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    3
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+69:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    3
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+70:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+71:  [ 0]LOAD_CONST    5
+     [ 2]STORE_VAR     5
+
+72:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    5
+     [ 8]ARITHM        4
+     [ 2]STORE_VAR     5
+
+73:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    1
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+75:  [ 1]LOAD_VAR      5
+     [ 0]LOAD_CONST    1
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+76:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+77:  [ 0]LOAD_CONST    4
+     [ 2]STORE_VAR     5
+
+78:  [ 0]LOAD_CONST    1
+     [ 3]LOAD_ARRAY    0
+     [ 1]LOAD_VAR      5
+     [12]SND           
+
+79:  [ 0]LOAD_CONST    1
+     [ 3]LOAD_ARRAY    0
+     [13]RCV           
+     [ 5]BUILD_VAR     6
+     [ 2]STORE_VAR     6
+
+80:  [ 1]LOAD_VAR      6
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+82:  [ 1]LOAD_VAR      6
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+83:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+84:  [ 0]LOAD_CONST    1
+     [ 5]BUILD_VAR     7
+     [ 2]STORE_VAR     7
+
+85:  [ 0]LOAD_CONST    4
+     [ 6]BUILD_ARRAY   1
+     [ 1]LOAD_VAR      7
+     [ 4]STORE_ARRAY   1
+
+86:  [ 1]LOAD_VAR      7
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     7
+
+88:  [ 1]LOAD_VAR      7
+     [ 0]LOAD_CONST    17
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   7
+
+89:  [ 1]LOAD_VAR      4
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     4
+
+90:  [ 0]LOAD_CONST    1
+     [ 2]STORE_VAR     7
+
+91:  [ 1]LOAD_VAR      7
+     [ 3]LOAD_ARRAY    1
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    0
+     [10]JMP_IF_TRUE   6
+
+92:  [ 1]LOAD_VAR      7
+     [ 3]LOAD_ARRAY    1
+     [ 0]LOAD_CONST    4
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   6
+
+93:  [ 1]LOAD_VAR      7
+     [ 0]LOAD_CONST    4
+     [ 8]ARITHM        0
+     [ 2]STORE_VAR     7
+
+95:  [ 1]LOAD_VAR      7
+     [ 0]LOAD_CONST    17
+     [ 9]COMPARE_OP    2
+     [10]JMP_IF_TRUE   8
+
+96:  [ 0]LOAD_CONST    19
+     [15]PRN           0
+
+97:  [16]RET           
+
+99:  [ 0]LOAD_CONST    15
+     [ 1]LOAD_VAR      4
+     [ 1]LOAD_VAR      5
+     [15]PRN           2
