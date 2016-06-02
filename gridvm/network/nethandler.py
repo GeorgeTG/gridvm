@@ -75,8 +75,6 @@ class NetHandler:
         self._shutdown_req = False
         while not self._terminate:
 
-            # FIXME: Bad way - use select instead, for both socket and queue
-            #        or maybe switch queue to pipe
             to_send = self.comms.get_to_send_requests()
             for (runtime_id, packet) in to_send:
                 # Add required fields to packet
@@ -101,7 +99,6 @@ class NetHandler:
                     ))
                     self.send_packet(packet)
 
-
             try:
                 #self.logger.debug('Waiting for packets...')
                 data = self.recv_packet([
@@ -117,8 +114,8 @@ class NetHandler:
                     PacketType.MIGRATE_THREAD,      # Local
                     PacketType.MIGRATION_COMPLETED  # Multicast
                 ], timeout=100)
-            except KeyboardInterrupt:
-                self.shutdown()
+            except:
+                #self.shutdown()
                 continue
 
             ##### DEBUGGING #######
@@ -143,6 +140,7 @@ class NetHandler:
             if packet.type == PacketType.DISCOVER_REQ:
                 # Save runtime data & listen for later requests
                 self.runtimes[runtime_id] = (ip, port)
+                self.logger.info('Found peer @ {}:{}'.format(ip, port))
 
                 # Send runtime info
                 self.logger.debug('Sending runtime info @ {}:{}'.format(ip, port))
@@ -212,7 +210,7 @@ class NetHandler:
                     ))
                     continue
 
-                #del self.runtimes[runtime_id]
+                del self.runtimes[runtime_id]
 
                 # Send ACK to sender
                 self.logger.debug('Replying ACK @ {}:{}'.format(ip, port))
@@ -281,7 +279,7 @@ class NetHandler:
                 thread_uid, new_location = packet['thread_uid'], packet['runtime_id']
                 self.comms.update_thread_location(thread_uid, new_location)
 
-
+        self.logger.debug('Cleaning up...')
         self.cleanup()
 
     def do_migration(self, runtime_id, packet):
@@ -323,7 +321,7 @@ class NetHandler:
             port=self.port,
             runtime_id=self.runtime_id
         )
-        self.send_packet(pkt)
+        self.comms._to_send.put((None, pkt))
 
     def cleanup(self):
         funcs = [
@@ -398,36 +396,35 @@ class NetHandler:
         while True:
             try:
                 avail_socks = dict( self.poller.poll(timeout=timeout) )
-            except:
-                return None
 
-            #print(avail_socks)
-            if not avail_socks: # Timeout has occured
-                return None
-
-            for sock in avail_socks:
-                if sock is self.rep_sock: # ROUTER socket
-                    addr, _, packet = sock.recv_multipart()
-                    packet = Packet.from_bytes(packet)
-                elif sock is self.msub_sock: # SUB socket
-                    addr, packet = None, sock.recv_pyobj()
-                #print(addr, packet)
-
-                if not packet:
+                if not avail_socks: # Timeout has occured
                     return None
 
-                # Check if packet is the same we previously sent over multicast
-                if packet in self.msend_packets:
-                    self.msend_packets.remove(packet)
-                    continue
+                for sock in avail_socks:
+                    if sock is self.rep_sock: # ROUTER socket
+                        addr, _, packet = sock.recv_multipart()
+                        packet = Packet.from_bytes(packet)
+                    elif sock is self.msub_sock: # SUB socket
+                        addr, packet = None, sock.recv_pyobj()
+                    else:
+                        continue
 
-                # Check if we got the packet we want
-                if packet.type in packet_types:
-                    return (addr, packet)
+                    if not packet:
+                        return None
 
-                # Store the packet for later use
-                self.packet_storage[packet.type].append( (addr, packet) )
+                    # Check if packet is the same we previously sent over multicast
+                    if packet in self.msend_packets:
+                        self.msend_packets.remove(packet)
+                        continue
 
+                    # Check if we got the packet we want
+                    if packet.type in packet_types:
+                        return (addr, packet)
+
+                    # Store the packet for later use
+                    self.packet_storage[packet.type].append( (addr, packet) )
+            except:
+                return None
 
 if __name__ == '__main__':
     #assert(len(sys.argv) == 3)

@@ -124,7 +124,6 @@ class Runtime(object):
 
     def shutdown(self):
         self.running = False
-        self._comms.shutdown()
 
         # Send all foreign threads away
         for program_id in self._programs:
@@ -134,6 +133,7 @@ class Runtime(object):
             for thread_id in self._programs[program_id]:
                 self.logger.info('Getting rid of {}:{}..'.format(program_id, thread_id))
                 self.add_local_request( LocalRequest.MIGRATE, (program_id, thread_id, None))
+
 
     def on_thread_fail(self, failed_inter):
         """ Called when a Thread fails """
@@ -211,7 +211,6 @@ class Runtime(object):
             list = self._get_next_round()
 
         self.logger.info('Exiting...')
-        self._comms.nethandler.cleanup()
 
     def check_for_requests(self):
         # Check for migrations sent over the network
@@ -243,6 +242,9 @@ class Runtime(object):
                     self._request_rep.put( self._comms.get_runtimes() )
         except Empty:
             pass
+
+        if not self.running:
+            self._comms.shutdown()
 
     def get_local_result(self):
         """ Called from  shell to get a command result, returns (item, message) """
