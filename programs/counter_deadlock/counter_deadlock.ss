@@ -10,6 +10,7 @@ SET $cnt 0
 SND $nxt $cnt
 
 L1 RCV $prv $cnt
+   SLP 1
    ADD $cnt $cnt 1
    BGE $cnt $argv[2] L2
    SND $nxt $cnt

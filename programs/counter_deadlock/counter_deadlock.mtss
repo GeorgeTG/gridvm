@@ -1,4 +1,4 @@
-#SIMPLESCRIPT_MULTITHREADED 3 
-#THREAD "counter_deadlock.ss" 3 100
-#THREAD "counter_deadlock.ss" 3 100
-#THREAD "counter_deadlock.ss" 3 100
+#SIMPLESCRIPT_MULTITHREADED 3
+#THREAD "counter_deadlock.ss" 3 15
+#THREAD "counter_deadlock.ss" 3 15
+#THREAD "counter_deadlock.ss" 3 15
