@@ -149,8 +149,7 @@ def command_failed():
         + CROSS + (term.move_down()*lines)) )
 
 def shutdown():
-    global runtime
-    runtime.shutdown()
+    raise KeyboardInterrupt
 
 def version():
     print("{}GridVM shell {}v{}{}{}".format(
