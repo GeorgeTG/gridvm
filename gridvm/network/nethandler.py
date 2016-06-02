@@ -333,6 +333,8 @@ class NetHandler:
         self.rep_sock.close()
         self.context.term()
 
+        # TODO: Signal runtime to close
+
     def print_runtimes(self):
         to_print = '\n' + 10 * '=' + ' RUNTIMES ' + 10 * '=' + '\n'
         for i, (runtime_id, (ip, port)) in enumerate(sorted(self.runtimes.items())):
@@ -388,7 +390,10 @@ class NetHandler:
                 return self.packet_storage[ptype].pop()
 
         while True:
-            avail_socks = dict( self.poller.poll(timeout=timeout) )
+            try:
+                avail_socks = dict( self.poller.poll(timeout=timeout) )
+            except:
+                return None
 
             #print(avail_socks)
             if not avail_socks: # Timeout has occured
@@ -401,6 +406,9 @@ class NetHandler:
                 elif sock is self.msub_sock: # SUB socket
                     addr, packet = None, sock.recv_pyobj()
                 #print(addr, packet)
+
+                if not packet:
+                    return None
 
                 # Check if packet is the same we previously sent over multicast
                 if packet in self.msend_packets:
