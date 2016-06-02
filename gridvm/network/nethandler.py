@@ -390,7 +390,10 @@ class NetHandler:
                 return self.packet_storage[ptype].pop()
 
         while True:
-            avail_socks = dict( self.poller.poll(timeout=timeout) )
+            try:
+                avail_socks = dict( self.poller.poll(timeout=timeout) )
+            except:
+                return None
 
             #print(avail_socks)
             if not avail_socks: # Timeout has occured
@@ -403,6 +406,9 @@ class NetHandler:
                 elif sock is self.msub_sock: # SUB socket
                     addr, packet = None, sock.recv_pyobj()
                 #print(addr, packet)
+
+                if not packet:
+                    return None
 
                 # Check if packet is the same we previously sent over multicast
                 if packet in self.msend_packets:
