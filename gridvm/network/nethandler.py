@@ -326,14 +326,20 @@ class NetHandler:
         self.send_packet(pkt)
 
     def cleanup(self):
-        # Closes all sockets
-        self.mpub_sock.close()
-        self.msub_sock.close()
-        self.req_sock.close()
-        self.rep_sock.close()
-        self.context.term()
+        funcs = [
+            self.mpub_sock.close,
+            self.msub_sock.close,
+            self.req_sock.close,
+            self.rep_sock.close,
+            self.context.term
+        ]
 
-        # TODO: Signal runtime to close
+        for f in funcs:
+            try:
+                f()
+            except:
+                pass
+
 
     def print_runtimes(self):
         to_print = '\n' + 10 * '=' + ' RUNTIMES ' + 10 * '=' + '\n'
